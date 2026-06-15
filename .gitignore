@@ -1,0 +1,6 @@
+node_modules/
+build/
+.svelte-kit/
+target/
+*.db
+.DS_Store
