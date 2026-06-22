@@ -1,4 +1,4 @@
-FROM oven/bun:1 AS frontend
+FROM oven/bun:1.3.3 AS frontend
 WORKDIR /app
 COPY frontend/package.json frontend/bun.lock ./
 RUN bun install --frozen-lockfile
