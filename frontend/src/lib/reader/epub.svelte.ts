@@ -60,16 +60,32 @@ function buildExcerpt(text: string, query: string): string {
 
 export interface EpubControllerOptions {
   fileUrl: string;
+  bookId: string;
   typography: Typography;
   themeName: ThemeName;
   initialCfi?: string;
 }
 
-function buildReaderCss(themeName: ThemeName, typography: Typography): string {
+function buildReaderCss(
+  themeName: ThemeName,
+  typography: Typography,
+  isFixedLayout = false,
+): string {
   const t = themeByName(themeName);
   const fam = fontFamilyCss(typography.fontFamily);
   const align = typography.align === "justify" ? "justify" : "left";
   const borderColor = t.isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.10)";
+
+  // Fixed-layout EPUBs are effectively authored pages. Reflowing or resetting their
+  // positioned content makes illustrations disappear and text drift out of place.
+  if (isFixedLayout) {
+    return `
+      html {
+        background: ${t.bg};
+        color-scheme: ${t.isDark ? "dark" : "light"};
+      }
+    `;
+  }
 
   return `
     @font-face {
@@ -211,6 +227,8 @@ function buildReaderCss(themeName: ThemeName, typography: Typography): string {
       background: ${t.bg};
       margin: 0;
       height: 100%;
+      max-width: 100%;
+      color-scheme: ${t.isDark ? "dark" : "light"};
     }
 
     body {
@@ -223,12 +241,23 @@ function buildReaderCss(themeName: ThemeName, typography: Typography): string {
       text-rendering: optimizeLegibility;
       font-kerning: normal;
       font-variant-ligatures: common-ligatures;
-      margin: 0;
-      padding: 0 ${typography.margin}px;
-      padding-top: 0 !important;
-      padding-bottom: 0 !important;
+      box-sizing: border-box !important;
+      margin: 0 !important;
+      padding-left: ${typography.margin}px !important;
+      padding-right: ${typography.margin}px !important;
       height: 100%;
       width: 100%;
+      max-width: 100% !important;
+      overflow-wrap: break-word;
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box !important;
+    }
+
+    section, article, main, header, footer, aside, nav, div {
+      max-width: 100%;
+      min-width: 0;
     }
 
     p, li, blockquote, td, th, figcaption, dd, dt {
@@ -243,6 +272,8 @@ function buildReaderCss(themeName: ThemeName, typography: Typography): string {
       hyphens: auto;
       -webkit-hyphens: auto;
       -ms-hyphens: auto;
+      max-width: 100%;
+      overflow-wrap: anywhere;
     }
 
     h1, h2, h3, h4, h5, h6 {
@@ -250,34 +281,57 @@ function buildReaderCss(themeName: ThemeName, typography: Typography): string {
       font-weight: 600 !important;
       line-height: ${typography.lineHeight} !important;
       margin: 0.5em 0 0.15em 0 !important;
+      text-indent: 0 !important;
+      max-width: 100%;
+      overflow-wrap: anywhere;
+      break-after: avoid;
+      page-break-after: avoid;
+    }
+
+    /*
+     * Many converted EPUBs create hanging headings with a negative text-indent
+     * balanced by a left margin. Reader margins can override only one half of
+     * that pair, which sends the title outside the page. Normalize heading-like
+     * classes as a unit while leaving ordinary hanging indents alone.
+     */
+    [class*="head"],
+    [class*="title"],
+    [epub\\|type~="title"] {
+      text-indent: 0 !important;
+      margin-left: 0 !important;
+      margin-right: 0 !important;
+      max-width: 100%;
+      overflow-wrap: anywhere;
     }
 
     div, span, a {
       font-family: ${fam} !important;
     }
 
-    img, svg, picture, canvas,
+    img,
     [class*="illustration"] img,
     [class*="picture"] img,
     [class*="photo"] img {
-      max-width: 100%;
-      max-height: 85vh;
-      height: auto;
-      width: auto;
+      max-width: 100% !important;
+      max-height: calc(100vh - 2.5rem) !important;
+      height: auto !important;
       display: block;
       margin: 0.2em auto !important;
-      object-fit: scale-down;
+      object-fit: contain;
+    }
+
+    svg, picture, canvas {
+      max-width: 100% !important;
+      max-height: calc(100vh - 2.5rem) !important;
     }
 
     figure,
-    [class*="figure"],
-    [class*="image"] {
-      display: block;
+    [class~="figure"],
+    [role="figure"] {
       max-width: 100%;
       margin: 0.6em auto !important;
-      break-inside: avoid;
-      page-break-inside: avoid;
-      overflow: visible;
+      break-inside: auto !important;
+      page-break-inside: auto !important;
     }
 
     figure > img,
@@ -311,6 +365,7 @@ function buildReaderCss(themeName: ThemeName, typography: Typography): string {
     }
 
     table {
+      width: auto;
       max-width: 100%;
       border-collapse: collapse;
       margin: 0.3em 0 !important;
@@ -335,25 +390,6 @@ function buildReaderCss(themeName: ThemeName, typography: Typography): string {
     sup, sub {
       font-size: 0.75em;
       line-height: 0;
-    }
-
-    body > :first-child,
-    body > :first-child > :first-child,
-    body > :first-child > :first-child > :first-child,
-    body > section:first-child,
-    body > article:first-child,
-    body > div:first-child,
-    body > main:first-child,
-    body > section:first-child > :first-child,
-    body > div:first-child > :first-child,
-    body > article:first-child > :first-child {
-      margin-top: 0 !important;
-      padding-top: 0 !important;
-    }
-
-    h1:first-child, h2:first-child, h3:first-child,
-    h1:first-of-type, h2:first-of-type, h3:first-of-type {
-      margin-top: 0 !important;
     }
 
     .hl-yellow { background: rgba(255, 213, 79, 0.35) !important; }
@@ -431,21 +467,26 @@ export class EpubController {
         manager: "default",
       });
 
-      const contentHooks = this.rendition.hooks.content.hooks as Function[];
-      for (let i = contentHooks.length - 1; i >= 0; i--) {
-        const fn = contentHooks[i];
-        if (fn.name === "bound adjustImages" || fn.toString().includes("break-inside")) {
-          contentHooks.splice(i, 1);
-          break;
-        }
-      }
-
       this.rendition.hooks.render.register((view: any) => {
         const contents = view?.contents;
-        if (contents && contents.addStylesheetCss) {
-          const css = buildReaderCss(this.options.themeName, this.options.typography);
+        if (!contents) return;
+        if (contents.addStylesheetCss) {
+          const css = buildReaderCss(
+            this.options.themeName,
+            this.options.typography,
+            this.isFixedLayout(),
+          );
           contents.addStylesheetCss(css, STYLESHEET_KEY);
         }
+      });
+
+      // The base tag MUST be in the Document before it's serialized and
+      // injected into the iframe. The `content` hook fires on the parsed
+      // Document, after epubjs's own `replaceBase` (which we override by
+      // writing to a tagged base element). The `render` hook would be too
+      // late — the browser has already resolved relative URLs by then.
+      this.bookObj.spine.hooks.content.register((doc: any, section: any) => {
+        this.injectBaseTag(doc, section);
       });
 
       await this.displayTarget(undefined);
@@ -727,13 +768,48 @@ export class EpubController {
 
   private injectToCurrentViews(): void {
     if (!this.rendition) return;
-    const css = buildReaderCss(this.options.themeName, this.options.typography);
+    const css = buildReaderCss(
+      this.options.themeName,
+      this.options.typography,
+      this.isFixedLayout(),
+    );
     const contentsList = this.rendition.getContents();
     for (const contents of contentsList) {
       if (contents && contents.addStylesheetCss) {
         contents.addStylesheetCss(css, STYLESHEET_KEY);
       }
     }
+  }
+
+  private injectBaseTag(doc: any, section: any): void {
+    if (!doc) return;
+    const head = doc.querySelector?.("head");
+    if (!head) return;
+
+    const sectionHref: string | undefined = section?.href;
+    const baseHref = sectionHref
+      ? `/api/books/${this.options.bookId}/resource/${
+          (() => {
+            const cleanHref = sectionHref.split("#")[0] ?? sectionHref;
+            const dir = cleanHref.split("/").slice(0, -1).join("/");
+            return dir ? dir + "/" : "";
+          })()
+        }`
+      : `/api/books/${this.options.bookId}/resource/`;
+
+    // Override whatever base href epubjs's own `replaceBase` set. We tag
+    // the element so we can find it again on re-renders.
+    let base = head.querySelector("base[data-openshelf]");
+    if (!base) {
+      base = doc.createElement("base");
+      base.setAttribute("data-openshelf", "true");
+      head.prepend(base);
+    }
+    base.setAttribute("href", baseHref);
+  }
+
+  private isFixedLayout(): boolean {
+    return this.rendition?.layout?.()?.name === "pre-paginated";
   }
 
   private async displayTarget(target?: string): Promise<boolean> {

@@ -143,6 +143,7 @@
     await bookmarksStore.load();
     const c = new EpubController({
       fileUrl: fileBlobUrl,
+      bookId: id,
       typography: settings.typography,
       themeName: settings.theme,
       initialCfi: stored.cfi,

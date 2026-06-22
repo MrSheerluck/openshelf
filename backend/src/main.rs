@@ -7,6 +7,7 @@ mod users;
 use axum::{extract::DefaultBodyLimit, http::Method, middleware, routing::get, Json, Router};
 use rusqlite::Connection;
 use serde::Serialize;
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tower_http::cors::{AllowOrigin, CorsLayer};
@@ -21,6 +22,7 @@ pub struct AppState {
     pub db: Mutex<Connection>,
     pub jwt_secret: String,
     pub storage: Option<storage::Storage>,
+    pub epub_cache: Mutex<HashMap<String, Arc<Vec<u8>>>>,
 }
 
 async fn health_check(state: axum::extract::State<Arc<AppState>>) -> Json<HealthResponse> {
@@ -53,6 +55,7 @@ async fn main() {
         db: Mutex::new(conn),
         jwt_secret,
         storage: s3_storage,
+        epub_cache: Mutex::new(HashMap::new()),
     });
 
     let public = Router::new()
@@ -67,6 +70,7 @@ async fn main() {
         .route("/books/{id}", get(books::get_book).delete(books::delete_book))
         .route("/books/{id}/file", get(books::serve_book_file))
         .route("/books/{id}/cover", get(books::serve_book_cover))
+        .route("/books/{id}/resource/{*path}", get(books::serve_book_resource))
         .route("/books/{id}/progress", axum::routing::post(books::save_progress))
         .route(
             "/books/{id}/annotations",
