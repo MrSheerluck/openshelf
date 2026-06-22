@@ -1,18 +1,24 @@
 <script lang="ts">
-  import type { Highlight } from "$lib/reader/types";
+  import { highlightColors } from "$lib/reader/highlights.svelte";
+  import type { Highlight, HighlightColor } from "$lib/reader/types";
 
   interface Props {
     highlight: Highlight;
     x: number;
     y: number;
     onSave: (note: string | null) => void;
+    onSetColor: (color: HighlightColor) => void;
     onDelete: () => void;
     onClose: () => void;
   }
 
-  let { highlight, x, y, onSave, onDelete, onClose }: Props = $props();
+  let { highlight, x, y, onSave, onSetColor, onDelete, onClose }: Props = $props();
 
-  let note = $state(highlight.note ?? "");
+  let note = $state("");
+
+  $effect(() => {
+    note = highlight.note ?? "";
+  });
 
   let style = $derived(() => {
     const w = 320;
@@ -26,7 +32,14 @@
   }
 </script>
 
-<div class="note-popup" style={style()} onclick={(e) => e.stopPropagation()} role="dialog">
+<div
+  class="note-popup"
+  style={style()}
+  onclick={(e) => e.stopPropagation()}
+  onkeydown={(e) => e.stopPropagation()}
+  role="dialog"
+  tabindex="-1"
+>
   <div class="note-header">
     <span class="note-quote">"{highlight.text.slice(0, 80)}{highlight.text.length > 80 ? '...' : ''}"</span>
     <button class="note-close" onclick={onClose} aria-label="Close">&times;</button>
@@ -37,6 +50,17 @@
     bind:value={note}
     rows="3"
   ></textarea>
+  <div class="note-colors" role="toolbar" aria-label="Highlight colors">
+    {#each highlightColors as color}
+      <button
+        class="color-btn"
+        class:active={highlight.color === color.value}
+        style="background: {color.css};"
+        onclick={() => onSetColor(color.value)}
+        aria-label={`Set ${color.label} highlight`}
+      ></button>
+    {/each}
+  </div>
   <div class="note-actions">
     <button class="note-delete" onclick={onDelete}>Delete highlight</button>
     <button class="note-save" onclick={save}>Save note</button>
@@ -112,6 +136,26 @@
     justify-content: space-between;
     margin-top: 0.5rem;
     gap: 0.4rem;
+  }
+
+  .note-colors {
+    display: flex;
+    gap: 0.35rem;
+    margin-top: 0.65rem;
+  }
+
+  .color-btn {
+    width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    padding: 0;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+  }
+
+  .color-btn.active {
+    border-color: var(--reader-panel-fg, #1a1a1a);
   }
 
   .note-delete {

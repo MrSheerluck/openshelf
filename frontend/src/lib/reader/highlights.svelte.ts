@@ -21,6 +21,8 @@ export class HighlightsStore {
         const data = await res.json();
         this.highlights = data.map((a: any) => ({
           id: a.id,
+          chapterIndex: a.chapter_index ?? 0,
+          chapterLabel: null,
           cfiRange: a.cfi,
           text: a.text,
           color: a.color as HighlightColor,
@@ -47,11 +49,20 @@ export class HighlightsStore {
     } catch {}
   }
 
-  async add(cfiRange: string, text: string, color: HighlightColor, note: string | null = null): Promise<Highlight> {
+  async add(
+    cfiRange: string,
+    text: string,
+    color: HighlightColor,
+    chapterIndex: number,
+    chapterLabel: string | null,
+    note: string | null = null,
+  ): Promise<Highlight> {
     const existing = this.highlights.find((h) => h.cfiRange === cfiRange);
     if (existing) {
       existing.color = color;
       existing.text = text;
+      existing.chapterIndex = chapterIndex;
+      existing.chapterLabel = chapterLabel;
       existing.note = note;
       this.saveLocal();
       this.syncUpdate(existing);
@@ -60,6 +71,8 @@ export class HighlightsStore {
     const tempId = crypto.randomUUID();
     const h: Highlight = {
       id: tempId,
+      chapterIndex,
+      chapterLabel,
       cfiRange,
       text,
       color,
@@ -98,6 +111,21 @@ export class HighlightsStore {
     } catch {}
   }
 
+  async updateColor(id: string, color: HighlightColor): Promise<void> {
+    const h = this.highlights.find((x) => x.id === id);
+    if (!h) return;
+    h.color = color;
+    this.saveLocal();
+    await this.syncUpdate(h);
+  }
+
+  setChapterLabel(id: string, chapterLabel: string | null): void {
+    const h = this.highlights.find((x) => x.id === id);
+    if (!h || h.chapterLabel === chapterLabel) return;
+    h.chapterLabel = chapterLabel;
+    this.saveLocal();
+  }
+
   findByCfi(cfiRange: string): Highlight | undefined {
     return this.highlights.find((h) => h.cfiRange === cfiRange);
   }
@@ -107,6 +135,7 @@ export class HighlightsStore {
       const res = await api(`/api/books/${this.bookId}/annotations`, {
         method: "POST",
         body: JSON.stringify({
+          chapter_index: h.chapterIndex,
           cfi: h.cfiRange,
           text: h.text,
           note: h.note,

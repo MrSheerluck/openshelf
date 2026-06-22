@@ -24,7 +24,14 @@
   }
 </script>
 
-<div class="selection-menu" style={style} onclick={(e) => e.stopPropagation()} role="toolbar">
+<div
+  class="selection-menu"
+  style={style}
+  onclick={(e) => e.stopPropagation()}
+  onkeydown={(e) => e.stopPropagation()}
+  role="toolbar"
+  tabindex="-1"
+>
   <div class="color-buttons">
     {#each highlightColors as c}
       <button

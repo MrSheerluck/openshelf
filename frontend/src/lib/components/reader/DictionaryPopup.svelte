@@ -63,7 +63,14 @@
   });
 </script>
 
-<div class="dict-popup" style={style()} onclick={(e) => e.stopPropagation()} role="dialog">
+<div
+  class="dict-popup"
+  style={style()}
+  onclick={(e) => e.stopPropagation()}
+  onkeydown={(e) => e.stopPropagation()}
+  role="dialog"
+  tabindex="-1"
+>
   <div class="dict-header">
     <span class="dict-word">{word}</span>
     {#if entries[0]?.phonetic}

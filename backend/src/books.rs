@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Multipart, Path, State},
+    extract::{Multipart, Path, Query, State},
     http::{header, StatusCode},
     response::Response,
     Json,
@@ -181,7 +181,7 @@ fn extract_epub_cover(epub_bytes: &[u8]) -> Option<(Vec<u8>, String)> {
     .or_else(|| {
         items
             .iter()
-            .find(|(id, href, mt)| {
+            .find(|(id, href, _)| {
                 let lower_id = id.to_lowercase();
                 let lower_href = href.to_lowercase();
                 lower_id.contains("cover")
@@ -566,6 +566,7 @@ pub async fn save_progress(
 #[derive(Serialize, Deserialize)]
 pub struct Annotation {
     pub id: String,
+    pub chapter_index: i64,
     pub cfi: String,
     pub text: String,
     pub note: Option<String>,
@@ -576,6 +577,7 @@ pub struct Annotation {
 
 #[derive(Deserialize)]
 pub struct CreateAnnotation {
+    pub chapter_index: Option<i64>,
     pub cfi: String,
     pub text: String,
     pub note: Option<String>,
@@ -595,19 +597,20 @@ pub async fn list_annotations(
     let db = state.db.lock().await;
     let mut stmt = db
         .prepare(
-            "SELECT id, cfi, text, note, color, created_at, updated_at FROM annotations WHERE book_id = ?1 ORDER BY created_at ASC",
+            "SELECT id, chapter_index, cfi, text, note, color, created_at, updated_at FROM annotations WHERE book_id = ?1 ORDER BY created_at ASC",
         )
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let rows = stmt
         .query_map(params![id], |row| {
             Ok(Annotation {
                 id: row.get(0)?,
-                cfi: row.get(1)?,
-                text: row.get(2)?,
-                note: row.get(3)?,
-                color: row.get(4)?,
-                created_at: row.get(5)?,
-                updated_at: row.get(6)?,
+                chapter_index: row.get(1)?,
+                cfi: row.get(2)?,
+                text: row.get(3)?,
+                note: row.get(4)?,
+                color: row.get(5)?,
+                created_at: row.get(6)?,
+                updated_at: row.get(7)?,
             })
         })
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -622,25 +625,27 @@ pub async fn create_annotation(
 ) -> Result<Json<Annotation>, StatusCode> {
     let db = state.db.lock().await;
     let ann_id = Uuid::new_v4().to_string();
+    let chapter_index = body.chapter_index.unwrap_or(0);
     db.execute(
-        "INSERT INTO annotations (id, book_id, chapter_index, cfi, text, note, color) VALUES (?1, ?2, 0, ?3, ?4, ?5, ?6)",
-        params![ann_id, id, body.cfi, body.text, body.note, body.color],
+        "INSERT INTO annotations (id, book_id, chapter_index, cfi, text, note, color) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        params![ann_id, id, chapter_index, body.cfi, body.text, body.note, body.color],
     )
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let row = db
         .query_row(
-            "SELECT id, cfi, text, note, color, created_at, updated_at FROM annotations WHERE id = ?1",
+            "SELECT id, chapter_index, cfi, text, note, color, created_at, updated_at FROM annotations WHERE id = ?1",
             params![ann_id],
             |row| {
                 Ok(Annotation {
                     id: row.get(0)?,
-                    cfi: row.get(1)?,
-                    text: row.get(2)?,
-                    note: row.get(3)?,
-                    color: row.get(4)?,
-                    created_at: row.get(5)?,
-                    updated_at: row.get(6)?,
+                    chapter_index: row.get(1)?,
+                    cfi: row.get(2)?,
+                    text: row.get(3)?,
+                    note: row.get(4)?,
+                    color: row.get(5)?,
+                    created_at: row.get(6)?,
+                    updated_at: row.get(7)?,
                 })
             },
         )
@@ -670,6 +675,208 @@ pub async fn delete_annotation(
     db.execute(
         "DELETE FROM annotations WHERE id = ?1 AND book_id = ?2",
         params![ann_id, id],
+    )
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+// ---- Export annotations ----
+
+pub async fn export_annotations(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Query(params): Query<ExportParams>,
+) -> Result<Response, StatusCode> {
+    let format = params.format.as_deref().unwrap_or("json");
+    let db = state.db.lock().await;
+
+    let book_title: String = db
+        .query_row("SELECT title FROM books WHERE id = ?1", params![id], |row| row.get(0))
+        .map_err(|_| StatusCode::NOT_FOUND)?;
+
+    let annotations: Vec<Annotation> = {
+        let mut stmt = db
+            .prepare("SELECT id, chapter_index, cfi, text, note, color, created_at FROM annotations WHERE book_id = ?1 ORDER BY created_at ASC")
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let rows = stmt
+            .query_map(params![id], |row| {
+                Ok(Annotation {
+                    id: row.get(0)?,
+                    chapter_index: row.get(1)?,
+                    cfi: row.get(2)?,
+                    text: row.get(3)?,
+                    note: row.get(4)?,
+                    color: row.get(5)?,
+                    created_at: row.get(6)?,
+                    updated_at: row.get(6)?,
+                })
+            })
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        rows.filter_map(|r| r.ok()).collect()
+    };
+    drop(db);
+
+    if format == "markdown" || format == "md" {
+        let mut md = format!("# Highlights: {}\n\n", book_title);
+        for a in &annotations {
+            md.push_str(&format!("## Chapter {}\n\n", a.chapter_index + 1));
+            md.push_str(&format!("> {}\n\n", a.text.replace('\n', "\n> ")));
+            if let Some(note) = &a.note {
+                if !note.is_empty() {
+                    md.push_str(&format!("**Note:** {}\n\n", note));
+                }
+            }
+            md.push_str(&format!("*Color: {} · Created: {}*\n\n---\n\n", a.color, a.created_at));
+        }
+        if annotations.is_empty() {
+            md.push_str("No highlights yet.\n");
+        }
+        Ok(Response::builder()
+            .header(header::CONTENT_TYPE, "text/markdown; charset=utf-8")
+            .header(
+                header::CONTENT_DISPOSITION,
+                format!("attachment; filename=\"{}-highlights.md\"", sanitize_filename(&book_title)),
+            )
+            .body(md.into())
+            .unwrap())
+    } else {
+        let json = serde_json::json!({
+            "book": book_title,
+            "exported_at": std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0),
+            "highlights": annotations.iter().map(|a| serde_json::json!({
+                "id": a.id,
+                "chapter_index": a.chapter_index,
+                "text": a.text,
+                "note": a.note,
+                "color": a.color,
+                "cfi": a.cfi,
+                "created_at": a.created_at,
+            })).collect::<Vec<_>>(),
+        });
+        let body = serde_json::to_string_pretty(&json).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        Ok(Response::builder()
+            .header(header::CONTENT_TYPE, "application/json; charset=utf-8")
+            .header(
+                header::CONTENT_DISPOSITION,
+                format!("attachment; filename=\"{}-highlights.json\"", sanitize_filename(&book_title)),
+            )
+            .body(body.into())
+            .unwrap())
+    }
+}
+
+#[derive(Deserialize)]
+pub struct ExportParams {
+    pub format: Option<String>,
+}
+
+fn sanitize_filename(name: &str) -> String {
+    name.chars()
+        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+        .collect()
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Bookmark {
+    pub id: String,
+    pub chapter_index: i64,
+    pub cfi: String,
+    pub label: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Deserialize)]
+pub struct CreateBookmark {
+    pub chapter_index: i64,
+    pub cfi: String,
+    pub label: Option<String>,
+}
+
+pub async fn list_bookmarks(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<Json<Vec<Bookmark>>, StatusCode> {
+    let db = state.db.lock().await;
+    let mut stmt = db
+        .prepare(
+            "SELECT id, chapter_index, cfi, label, created_at FROM bookmarks WHERE book_id = ?1 ORDER BY created_at ASC",
+        )
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let rows = stmt
+        .query_map(params![id], |row| {
+            Ok(Bookmark {
+                id: row.get(0)?,
+                chapter_index: row.get(1)?,
+                cfi: row.get(2)?,
+                label: row.get(3)?,
+                created_at: row.get(4)?,
+            })
+        })
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(rows.filter_map(|r| r.ok()).collect()))
+}
+
+pub async fn create_bookmark(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Json(body): Json<CreateBookmark>,
+) -> Result<Json<Bookmark>, StatusCode> {
+    let db = state.db.lock().await;
+    let existing = db
+        .query_row(
+            "SELECT id, chapter_index, cfi, label, created_at FROM bookmarks WHERE book_id = ?1 AND cfi = ?2",
+            params![id, body.cfi],
+            |row| {
+                Ok(Bookmark {
+                    id: row.get(0)?,
+                    chapter_index: row.get(1)?,
+                    cfi: row.get(2)?,
+                    label: row.get(3)?,
+                    created_at: row.get(4)?,
+                })
+            },
+        )
+        .ok();
+    if let Some(bookmark) = existing {
+        return Ok(Json(bookmark));
+    }
+
+    let bookmark_id = Uuid::new_v4().to_string();
+    db.execute(
+        "INSERT INTO bookmarks (id, book_id, chapter_index, cfi, label) VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![bookmark_id, id, body.chapter_index, body.cfi, body.label],
+    )
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let bookmark = db
+        .query_row(
+            "SELECT id, chapter_index, cfi, label, created_at FROM bookmarks WHERE id = ?1",
+            params![bookmark_id],
+            |row| {
+                Ok(Bookmark {
+                    id: row.get(0)?,
+                    chapter_index: row.get(1)?,
+                    cfi: row.get(2)?,
+                    label: row.get(3)?,
+                    created_at: row.get(4)?,
+                })
+            },
+        )
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(bookmark))
+}
+
+pub async fn delete_bookmark(
+    State(state): State<Arc<AppState>>,
+    Path((id, bookmark_id)): Path<(String, String)>,
+) -> Result<StatusCode, StatusCode> {
+    let db = state.db.lock().await;
+    db.execute(
+        "DELETE FROM bookmarks WHERE id = ?1 AND book_id = ?2",
+        params![bookmark_id, id],
     )
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(StatusCode::NO_CONTENT)

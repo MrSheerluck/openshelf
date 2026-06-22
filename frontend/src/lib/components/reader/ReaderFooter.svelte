@@ -1,25 +1,24 @@
 <script lang="ts">
   interface Props {
     progress: number;
-    minutesLeft: number;
     totalSections: number;
     currentSectionIndex: number;
+    canJumpBookmarks: boolean;
+    onPrevBookmark: () => void;
+    onNextBookmark: () => void;
   }
 
-  let { progress, minutesLeft, totalSections, currentSectionIndex }: Props = $props();
-
-  let timeLabel = $derived(
-    minutesLeft > 0
-      ? minutesLeft === 1
-        ? "~1 min left"
-        : `~${minutesLeft} mins left`
-      : ""
-  );
+  let { progress, totalSections, currentSectionIndex, canJumpBookmarks, onPrevBookmark, onNextBookmark }: Props = $props();
 </script>
 
 <footer class="reader-footer">
   <div class="footer-content">
-    <span class="footer-time">{timeLabel}</span>
+    {#if canJumpBookmarks}
+      <div class="bookmark-jumps">
+        <button class="jump-btn" onclick={onPrevBookmark} aria-label="Previous bookmark">Prev bookmark</button>
+        <button class="jump-btn" onclick={onNextBookmark} aria-label="Next bookmark">Next bookmark</button>
+      </div>
+    {/if}
     {#if totalSections > 0}
       <div class="section-dots" aria-hidden="true">
         {#each { length: Math.min(totalSections, 40) } as _, i}
@@ -45,20 +44,30 @@
   .footer-content {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-end;
     gap: 0.75rem;
   }
 
-  .footer-time,
+  .bookmark-jumps {
+    display: flex;
+    gap: 0.35rem;
+    margin-right: auto;
+  }
+
+  .jump-btn {
+    border: 1px solid var(--reader-border, rgba(0, 0, 0, 0.12));
+    background: var(--reader-panel-bg, #fff);
+    color: var(--reader-panel-fg, #1a1a1a);
+    border-radius: 999px;
+    font-size: 0.68rem;
+    padding: 0.28rem 0.55rem;
+    cursor: pointer;
+  }
+
   .footer-percent {
     font-size: 0.7rem;
     color: var(--reader-muted, #9ca3af);
     white-space: nowrap;
-    min-width: 72px;
-  }
-
-  .footer-percent {
-    text-align: right;
   }
 
   .section-dots {

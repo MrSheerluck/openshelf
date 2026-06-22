@@ -54,6 +54,10 @@ export class ReaderSettingsStore {
     this.syncToBackend();
   }
 
+  clearCfi(): void {
+    this.saveLocal(undefined);
+  }
+
   private applySettings(s: { theme?: ThemeName; typography?: Partial<Typography> }): void {
     if (s.theme && validThemes.has(s.theme)) this.theme = s.theme;
     if (s.typography) {

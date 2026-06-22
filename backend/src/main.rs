@@ -73,10 +73,19 @@ async fn main() {
             get(books::list_annotations).post(books::create_annotation),
         )
         .route(
+            "/books/{id}/bookmarks",
+            get(books::list_bookmarks).post(books::create_bookmark),
+        )
+        .route(
+            "/books/{id}/bookmarks/{bookmark_id}",
+            axum::routing::delete(books::delete_bookmark),
+        )
+        .route(
             "/books/{id}/annotations/{ann_id}",
             axum::routing::put(books::update_annotation)
                 .delete(books::delete_annotation),
         )
+        .route("/books/{id}/annotations/export", get(books::export_annotations))
         .route(
             "/books/{id}/settings",
             get(books::get_settings).put(books::save_settings),

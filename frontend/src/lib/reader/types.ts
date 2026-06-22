@@ -23,6 +23,12 @@ export interface TocItem {
   subitems: TocItem[];
 }
 
+export interface FlattenedTocItem {
+  label: string;
+  href: string;
+  index: number;
+}
+
 export type FontFamily = "literata" | "andika" | "shantell" | "noto" | "libertinus";
 export type Alignment = "left" | "justify";
 
@@ -42,9 +48,27 @@ export interface ReaderSettings {
 
 export interface Highlight {
   id: string;
+  chapterIndex: number;
+  chapterLabel: string | null;
   cfiRange: string;
   text: string;
   color: HighlightColor;
   note: string | null;
   createdAt: number;
+}
+
+export interface Bookmark {
+  id: string;
+  chapterIndex: number;
+  chapterLabel: string | null;
+  cfi: string;
+  createdAt: number;
+}
+
+export interface SearchResult {
+  id: string;
+  chapterIndex: number;
+  chapterLabel: string;
+  excerpt: string;
+  href: string;
 }

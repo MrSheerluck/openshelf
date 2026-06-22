@@ -2,9 +2,17 @@
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
   import { api } from "$lib/api";
-  import type { Book, ThemeName, Typography, HighlightColor, Highlight } from "$lib/reader/types";
+  import type {
+    Book,
+    ThemeName,
+    Typography,
+    HighlightColor,
+    Highlight,
+    SearchResult,
+  } from "$lib/reader/types";
   import { ReaderSettingsStore } from "$lib/reader/settings.svelte";
   import { HighlightsStore } from "$lib/reader/highlights.svelte";
+  import { BookmarksStore } from "$lib/reader/bookmarks.svelte";
   import { EpubController } from "$lib/reader/epub.svelte";
   import ReaderHeader from "$lib/components/reader/ReaderHeader.svelte";
   import ReaderFooter from "$lib/components/reader/ReaderFooter.svelte";
@@ -15,6 +23,8 @@
   import DictionaryPopup from "$lib/components/reader/DictionaryPopup.svelte";
   import NoteEditor from "$lib/components/reader/NoteEditor.svelte";
   import HighlightsList from "$lib/components/reader/HighlightsList.svelte";
+  import BookmarksPanel from "$lib/components/reader/BookmarksPanel.svelte";
+  import SearchPanel from "$lib/components/reader/SearchPanel.svelte";
 
   const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
   const IDLE_HIDE_MS = 3000;
@@ -28,21 +38,23 @@
   let showToc = $state(false);
   let showTypography = $state(false);
   let showHighlights = $state(false);
+  let showBookmarks = $state(false);
+  let showSearch = $state(false);
 
   let settings = $state<ReaderSettingsStore | null>(null);
   let highlightsStore = $state<HighlightsStore | null>(null);
+  let bookmarksStore = $state<BookmarksStore | null>(null);
   let controller = $state<EpubController | null>(null);
+  let viewerMountStarted = false;
 
   type Selection = { cfiRange: string; text: string; x: number; y: number } | null;
   let selection = $state<Selection>(null);
   let dictWord = $state<{ word: string; x: number; y: number } | null>(null);
   let noteEditor = $state<{ highlight: Highlight; x: number; y: number } | null>(null);
-
-  let minutesLeft = $derived(
-    controller?.estimatedBookMinutes
-      ? Math.max(1, Math.round(controller.estimatedBookMinutes * (1 - (controller?.progress ?? 0) / 100)))
-      : 0
-  );
+  let searchQuery = $state("");
+  let searchResults = $state<SearchResult[]>([]);
+  let searching = $state(false);
+  let searchTimer: ReturnType<typeof setTimeout> | null = null;
 
   function fileUrl(): string {
     return `${API_URL}/api/books/${id}/file`;
@@ -72,11 +84,12 @@
   }
 
   async function loadBook() {
+    loading = true;
+    error = "";
     try {
       const res = await api(`/api/books/${id}`);
       if (res.ok) {
         book = await res.json();
-        loading = false;
       } else {
         error = "Book not found";
         loading = false;
@@ -93,12 +106,12 @@
 
   $effect(() => {
     if (!book) return;
-    if (book.format === "pdf") {
+    if (book.format === "pdf" || book.format === "epub") {
       prefetchFileBlob().then((url) => {
         if (url) {
           loading = false;
         } else {
-          error = "Failed to load PDF";
+          error = `Failed to load ${book?.format === "pdf" ? "PDF" : "EPUB"}`;
           loading = false;
         }
       });
@@ -114,17 +127,22 @@
   });
 
   async function handleViewerMount(el: HTMLDivElement) {
-    if (!book || book.format !== "epub" || controller) return;
+    if (!book || book.format !== "epub" || !fileBlobUrl || controller || viewerMountStarted) return;
+    viewerMountStarted = true;
     if (!settings) {
       settings = new ReaderSettingsStore(id);
     }
     if (!highlightsStore) {
       highlightsStore = new HighlightsStore(id);
     }
+    if (!bookmarksStore) {
+      bookmarksStore = new BookmarksStore(id);
+    }
     const stored = await settings.load();
     await highlightsStore.load();
+    await bookmarksStore.load();
     const c = new EpubController({
-      fileUrl: fileUrl(),
+      fileUrl: fileBlobUrl,
       typography: settings.typography,
       themeName: settings.theme,
       initialCfi: stored.cfi,
@@ -153,11 +171,18 @@
       }
     });
     controller = c;
-    c.mount(el).then(() => {
-      if (highlightsStore) {
-        c.renderHighlights(highlightsStore.highlights);
-      }
-    });
+    await c.mount(el);
+    if (c.error) {
+      error = c.error;
+      return;
+    }
+    if (c.restoreFailed) {
+      settings?.clearCfi();
+    }
+    if (highlightsStore) {
+      c.renderHighlights(highlightsStore.highlights);
+      syncHighlightChapterLabels();
+    }
   }
 
   function setTheme(t: ThemeName) {
@@ -176,7 +201,13 @@
 
   function handleHighlight(color: HighlightColor) {
     if (!selection || !highlightsStore || !controller) return;
-    highlightsStore.add(selection.cfiRange, selection.text, color);
+    highlightsStore.add(
+      selection.cfiRange,
+      selection.text,
+      color,
+      controller.currentSectionIndex,
+      controller.currentChapterLabel(),
+    );
     controller.addHighlight(selection.cfiRange, color);
     controller.clearSelection();
     selection = null;
@@ -206,6 +237,14 @@
     noteEditor = null;
   }
 
+  function handleSetHighlightColor(color: HighlightColor) {
+    if (!noteEditor || !highlightsStore || !controller) return;
+    highlightsStore.updateColor(noteEditor.highlight.id, color);
+    noteEditor.highlight.color = color;
+    controller.removeHighlight(noteEditor.highlight.cfiRange);
+    controller.addHighlight(noteEditor.highlight.cfiRange, color);
+  }
+
   function handleDeleteHighlight() {
     if (!noteEditor || !highlightsStore || !controller) return;
     highlightsStore.remove(noteEditor.highlight.id);
@@ -223,6 +262,55 @@
   function handleHighlightSelect(cfiRange: string) {
     controller?.display(cfiRange);
     showHighlights = false;
+  }
+
+  function handleBookmarkSelect(cfi: string) {
+    controller?.display(cfi);
+    showBookmarks = false;
+  }
+
+  async function toggleBookmark() {
+    if (!controller?.currentCfi || !bookmarksStore) return;
+    const existing = bookmarksStore.findByCfi(controller.currentCfi);
+    if (existing) {
+      await bookmarksStore.remove(existing.id);
+      return;
+    }
+    await bookmarksStore.add(
+      controller.currentCfi,
+      controller.currentSectionIndex,
+      controller.currentChapterLabel(),
+    );
+  }
+
+  function jumpBookmark(direction: 1 | -1) {
+    if (!controller?.currentCfi || !bookmarksStore || bookmarksStore.bookmarks.length === 0) return;
+    const sorted = [...bookmarksStore.bookmarks].sort((a, b) => a.chapterIndex - b.chapterIndex || a.createdAt - b.createdAt);
+    const currentIndex = sorted.findIndex((bookmark) => bookmark.cfi === controller.currentCfi);
+    const anchorIndex = currentIndex >= 0 ? currentIndex : (direction > 0 ? -1 : 0);
+    const nextIndex = direction > 0
+      ? (anchorIndex + 1) % sorted.length
+      : (anchorIndex <= 0 ? sorted.length - 1 : anchorIndex - 1);
+    controller.display(sorted[nextIndex].cfi);
+  }
+
+  async function runSearch(query: string) {
+    if (!controller || query.trim().length < 2) {
+      searchResults = [];
+      searching = false;
+      return;
+    }
+    searching = true;
+    searchResults = await controller.search(query);
+    searching = false;
+  }
+
+  function syncHighlightChapterLabels() {
+    if (!controller || !highlightsStore) return;
+    for (const highlight of highlightsStore.highlights) {
+      const label = controller.resolveChapterLabel(highlight.chapterIndex, highlight.cfiRange);
+      highlightsStore.setChapterLabel(highlight.id, label);
+    }
   }
 
   function prevPage() {
@@ -252,6 +340,14 @@
       if (e.key === "Escape") showHighlights = false;
       return;
     }
+    if (showBookmarks) {
+      if (e.key === "Escape") showBookmarks = false;
+      return;
+    }
+    if (showSearch) {
+      if (e.key === "Escape") showSearch = false;
+      return;
+    }
     if (selection || dictWord || noteEditor) {
       if (e.key === "Escape") {
         selection = null;
@@ -262,6 +358,11 @@
     }
     if (e.key === "ArrowLeft") prevPage();
     if (e.key === "ArrowRight") nextPage();
+    if (e.key.toLowerCase() === "b") toggleBookmark();
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") {
+      e.preventDefault();
+      showSearch = true;
+    }
     if (e.key === "Escape") goto("/");
   }
 
@@ -294,7 +395,7 @@
   }
 
   $effect(() => {
-    if (showToc || showTypography || showHighlights) {
+    if (showToc || showTypography || showHighlights || showBookmarks || showSearch) {
       if (idleTimer) {
         clearTimeout(idleTimer);
         idleTimer = null;
@@ -309,6 +410,33 @@
         idleTimer = null;
       }
     };
+  });
+
+  $effect(() => {
+    if (searchTimer) {
+      clearTimeout(searchTimer);
+      searchTimer = null;
+    }
+    if (!showSearch) {
+      searching = false;
+      return;
+    }
+    searchTimer = setTimeout(() => {
+      runSearch(searchQuery);
+    }, 220);
+    return () => {
+      if (searchTimer) {
+        clearTimeout(searchTimer);
+        searchTimer = null;
+      }
+    };
+  });
+
+  $effect(() => {
+    if (!controller || !highlightsStore) return;
+    controller.flatToc.length;
+    highlightsStore.highlights.length;
+    syncHighlightChapterLabels();
   });
 
   $effect(() => {
@@ -345,7 +473,11 @@
     <ReaderHeader
       title={book?.title ?? "Loading..."}
       showTocButton={book?.format === "epub"}
+      isBookmarked={!!(controller?.currentCfi && bookmarksStore?.findByCfi(controller.currentCfi))}
       onBack={goBack}
+      onToggleSearch={() => (showSearch = !showSearch)}
+      onToggleBookmarks={() => (showBookmarks = !showBookmarks)}
+      onToggleBookmark={toggleBookmark}
       onToggleToc={() => (showToc = !showToc)}
       onToggleTypography={() => (showTypography = !showTypography)}
       onToggleHighlights={() => (showHighlights = !showHighlights)}
@@ -366,9 +498,11 @@
     <div class="reader-footer-wrap" class:hidden={!showControls}>
       <ReaderFooter
         progress={controller?.progress ?? 0}
-        minutesLeft={minutesLeft}
         totalSections={controller?.totalSections ?? 0}
         currentSectionIndex={controller?.currentSectionIndex ?? 0}
+        canJumpBookmarks={(bookmarksStore?.bookmarks.length ?? 0) > 0}
+        onPrevBookmark={() => jumpBookmark(-1)}
+        onNextBookmark={() => jumpBookmark(1)}
       />
     </div>
   {/if}
@@ -396,9 +530,34 @@
   {#if showHighlights && highlightsStore && book?.format === "epub"}
     <HighlightsList
       highlights={highlightsStore.highlights}
+      bookId={id}
+      bookTitle={book?.title ?? "book"}
       onSelect={handleHighlightSelect}
       onDelete={handleDeleteHighlightFromList}
       onClose={() => (showHighlights = false)}
+    />
+  {/if}
+
+  {#if showBookmarks && bookmarksStore && book?.format === "epub"}
+    <BookmarksPanel
+      bookmarks={bookmarksStore.bookmarks}
+      onSelect={handleBookmarkSelect}
+      onDelete={(bookmarkId) => bookmarksStore?.remove(bookmarkId)}
+      onClose={() => (showBookmarks = false)}
+    />
+  {/if}
+
+  {#if showSearch && controller && book?.format === "epub"}
+    <SearchPanel
+      query={searchQuery}
+      {searching}
+      results={searchResults}
+      onQueryChange={(query) => (searchQuery = query)}
+      onSelect={(href) => {
+        controller?.display(href);
+        showSearch = false;
+      }}
+      onClose={() => (showSearch = false)}
     />
   {/if}
 
@@ -429,6 +588,7 @@
       x={noteEditor.x}
       y={noteEditor.y}
       onSave={handleSaveNote}
+      onSetColor={handleSetHighlightColor}
       onDelete={handleDeleteHighlight}
       onClose={() => (noteEditor = null)}
     />

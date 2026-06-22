@@ -4,15 +4,34 @@
 
   interface Props {
     highlights: Highlight[];
+    bookId: string;
+    bookTitle: string;
     onSelect: (cfiRange: string) => void;
     onDelete: (id: string) => void;
     onClose: () => void;
   }
 
-  let { highlights, onSelect, onDelete, onClose }: Props = $props();
+  let { highlights, bookId, bookTitle, onSelect, onDelete, onClose }: Props = $props();
 
   function colorCss(c: string): string {
     return highlightColors.find((x) => x.value === c)?.css ?? highlightColors[0].css;
+  }
+
+  function exportHighlights(format: "json" | "markdown") {
+    const url = `${import.meta.env.VITE_API_URL ?? "http://localhost:3001"}/api/books/${bookId}/annotations/export?format=${format}`;
+    fetch(url, { credentials: "include" })
+      .then((res) => {
+        if (!res.ok) throw new Error("Export failed");
+        return res.blob();
+      })
+      .then((blob) => {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `${bookTitle.replace(/[^a-zA-Z0-9-_]/g, "_")}-highlights.${format === "json" ? "json" : "md"}`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      })
+      .catch(() => {});
   }
 </script>
 
@@ -20,7 +39,13 @@
   <aside class="hl-panel" onclick={(e) => e.stopPropagation()} role="presentation">
     <div class="hl-header">
       <h3>Highlights</h3>
-      <button class="hl-close" onclick={onClose} aria-label="Close">&times;</button>
+      <div class="hl-header-actions">
+        {#if highlights.length > 0}
+          <button class="hl-export" onclick={() => exportHighlights("json")} title="Export as JSON" aria-label="Export JSON">JSON</button>
+          <button class="hl-export" onclick={() => exportHighlights("markdown")} title="Export as Markdown" aria-label="Export Markdown">MD</button>
+        {/if}
+        <button class="hl-close" onclick={onClose} aria-label="Close">&times;</button>
+      </div>
     </div>
     <div class="hl-body">
       {#if highlights.length === 0}
@@ -30,6 +55,9 @@
           <div class="hl-item" role="button" tabindex="0" onclick={() => onSelect(h.cfiRange)} onkeydown={(e) => e.key === "Enter" && onSelect(h.cfiRange)}>
             <div class="hl-bar" style="background: {colorCss(h.color)};"></div>
             <div class="hl-content">
+              {#if h.chapterLabel}
+                <p class="hl-chapter">{h.chapterLabel}</p>
+              {/if}
               <p class="hl-text">{h.text}</p>
               {#if h.note}
                 <p class="hl-note">{h.note}</p>
@@ -88,6 +116,27 @@
     margin: 0;
     font-size: 1rem;
     font-weight: 600;
+  }
+
+  .hl-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+  }
+
+  .hl-export {
+    background: none;
+    border: 1px solid var(--reader-border, rgba(0, 0, 0, 0.15));
+    border-radius: 5px;
+    padding: 0.2rem 0.5rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--reader-panel-fg, #1a1a1a);
+    transition: background 0.1s;
+  }
+  .hl-export:hover {
+    background: var(--reader-hover, rgba(0, 0, 0, 0.06));
   }
 
   .hl-close {
@@ -152,6 +201,15 @@
     -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
     overflow: hidden;
+  }
+
+  .hl-chapter {
+    margin: 0 0 0.25rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--reader-muted, #9ca3af);
   }
 
   .hl-note {
