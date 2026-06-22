@@ -3,4 +3,5 @@ build/
 .svelte-kit/
 target/
 *.db
+.env
 .DS_Store

@@ -6,8 +6,8 @@ A self-hosted ebook reader web app.
 
 ## Roadmap
 
-- **v0.1** — EPUB support with basic reader and library management
-- **Future** — MOBI, PDF, CBZ/CBR, and audiobook support
+- **v0.1** - EPUB support with basic reader and library management
+- **Future** - MOBI, PDF, CBZ/CBR, and audiobook support
 
 ## Dev
 
