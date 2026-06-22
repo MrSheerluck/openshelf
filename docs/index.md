@@ -8,6 +8,7 @@ OpenShelf is a self-hosted ebook reader web app. Fast, simple, private. Your lib
 
 - [Setup Guide](setup.md): Prerequisites, environment variables, running without Docker
 - [Deployment](deployment.md): Docker, VPS, custom domain + HTTPS
+- [Multiple apps on one host](multi-app.md): Hosting openshelf alongside other apps via a host-level Caddy
 - [Architecture](architecture.md): Project structure, data flow, design decisions
 - [Features](features.md): Reader, themes, bookmarks, highlights, what's coming
 - [API Reference](api-reference.md): Full REST API endpoint documentation

@@ -6,6 +6,7 @@
 
 - [Setup Guide](setup.md)
 - [Deployment](deployment.md)
+- [Multiple apps on one host](multi-app.md)
 - [Features](features.md)
 
 # Reference

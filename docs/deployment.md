@@ -312,4 +312,8 @@ docker compose restart openshelf
 
 Then open `http://your-host:8080/login` and set a new password.
 
-> **Note:** The `gen-hash` CLI helper in `backend/src/bin/gen_hash.rs` is dev-only: the production Docker image only ships the main backend binary. To seed a hash without going through the signup form, run `cargo run --bin gen-hash -- 'your-password'` on a development checkout and `UPDATE` the row with the PHC string.
+---
+
+## Multiple apps on one host
+
+This guide assumes openshelf is the only app on the VPS. If you already have another app (for example [openslate](https://github.com/MrSheerluck/openslate)) and want both reachable at `https://<app>.yourdomain.com` (no port in the URL), see [multi-app.md](multi-app.md). The pattern is a host-level Caddy that terminates TLS for every subdomain, with each app on a private localhost port serving plain HTTP. The docs cover the full setup, the `host-caddy-entrypoint.sh` workaround, and the cron patch that keeps openslate from rebinding ports `80` and `443` on auto-update.

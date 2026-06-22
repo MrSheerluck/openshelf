@@ -166,3 +166,7 @@ openshelf/
 **`Storage not configured` on upload:** Fill in the S3/R2 vars in `.env` and restart the backend.
 
 **Login keeps failing:** The first visit creates the user. If you cleared the database, the next signup will work again. If you forgot the password, delete the row from the `users` table and re-signup, or use `cargo run --bin gen-hash` to seed a new hash manually.
+
+## Multi-app note
+
+`scripts/install-cron.sh` matches the OpenShelf cron entry by the app directory (`cd ${APP_DIR}`), not by a generic string like `docker compose pull`. That means it is safe to run on a VPS that already has cron entries for other apps (for example openslate). Running it will only ever add, replace, or remove the OpenShelf line. See [multi-app.md](multi-app.md) for the full multi-app hosting pattern.

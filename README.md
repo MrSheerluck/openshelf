@@ -36,6 +36,8 @@ docker compose up -d
 
 Full step-by-step guide: [docs/deployment.md](docs/deployment.md)
 
+> **Already running another app on this VPS?** See [docs/multi-app.md](docs/multi-app.md) for the host-Caddy pattern that lets openshelf share a box with other apps at `https://<app>.yourdomain.com`.
+
 ---
 
 ## Features
