@@ -542,6 +542,105 @@ pub async fn serve_book_cover(
         .unwrap())
 }
 
+pub async fn serve_book_resource(
+    State(state): State<Arc<AppState>>,
+    Path((id, raw_path)): Path<(String, String)>,
+) -> Result<Response, StatusCode> {
+    let storage = storage(&state).map_err(|e| e.0)?;
+
+    // Reject any traversal attempts and normalize the requested path.
+    let normalized: String = raw_path
+        .split('/')
+        .filter(|s| !s.is_empty() && *s != "." && *s != "..")
+        .collect::<Vec<_>>()
+        .join("/");
+    if normalized.is_empty() {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    // Locate the EPUB in storage.
+    let db = state.db.lock().await;
+    let file_path: String = db
+        .query_row(
+            "SELECT file_path FROM books WHERE id = ?1",
+            params![id],
+            |row| row.get(0),
+        )
+        .map_err(|_| StatusCode::NOT_FOUND)?;
+    drop(db);
+
+    // Pull the EPUB bytes, caching them per-book so a 30-image book costs
+    // exactly one S3 fetch rather than 30.
+    let zip_bytes = {
+        let cache = state.epub_cache.lock().await;
+        if let Some(hit) = cache.get(&id) {
+            hit.clone()
+        } else {
+            drop(cache);
+            let fetched = storage
+                .get(&file_path)
+                .await
+                .map_err(|_| StatusCode::NOT_FOUND)?;
+            let arc = Arc::new(fetched);
+            state
+                .epub_cache
+                .lock()
+                .await
+                .insert(id.clone(), arc.clone());
+            arc
+        }
+    };
+
+    let cursor = Cursor::new(zip_bytes.as_ref());
+    let mut archive = zip::ZipArchive::new(cursor).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Try an exact-name match first, then fall back to a case-insensitive
+    // lookup because some authoring tools emit inconsistent case between the
+    // OPF manifest and the XHTML references.
+    let mut chosen: Option<String> = None;
+    for i in 0..archive.len() {
+        let entry = archive
+            .by_index(i)
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let name = entry.name().to_string();
+        if name == normalized {
+            chosen = Some(name);
+            break;
+        }
+    }
+    if chosen.is_none() {
+        let lower = normalized.to_lowercase();
+        for i in 0..archive.len() {
+            let entry = archive
+                .by_index(i)
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            if entry.name().to_lowercase() == lower {
+                chosen = Some(entry.name().to_string());
+                break;
+            }
+        }
+    }
+    let entry_name = chosen.ok_or(StatusCode::NOT_FOUND)?;
+    let mut entry = archive
+        .by_name(&entry_name)
+        .map_err(|_| StatusCode::NOT_FOUND)?;
+
+    let mut data = Vec::with_capacity(entry.size() as usize);
+    entry
+        .read_to_end(&mut data)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let mime = mime_guess::from_path(&entry_name)
+        .first_or_octet_stream()
+        .to_string();
+
+    Ok(Response::builder()
+        .header(header::CONTENT_TYPE, mime)
+        .header(header::CACHE_CONTROL, "public, max-age=86400")
+        .body(data.into())
+        .unwrap())
+}
+
 #[derive(Deserialize)]
 pub struct ProgressUpdate {
     pub cfi: String,
