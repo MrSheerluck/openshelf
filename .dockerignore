@@ -1,0 +1,15 @@
+.git
+.idea
+.vscode
+node_modules
+target
+build
+.svelte-kit
+*.db
+.env
+.DS_Store
+docs
+scripts
+*.md
+.github
+LICENSE

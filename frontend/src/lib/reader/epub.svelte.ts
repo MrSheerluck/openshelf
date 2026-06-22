@@ -484,7 +484,7 @@ export class EpubController {
       // injected into the iframe. The `content` hook fires on the parsed
       // Document, after epubjs's own `replaceBase` (which we override by
       // writing to a tagged base element). The `render` hook would be too
-      // late — the browser has already resolved relative URLs by then.
+      // late: the browser has already resolved relative URLs by then.
       this.bookObj.spine.hooks.content.register((doc: any, section: any) => {
         this.injectBaseTag(doc, section);
       });
