@@ -11,7 +11,6 @@
     onDownload: () => void;
     onPrev: () => void;
     onNext: () => void;
-    onToggleControls: () => void;
   }
 
   let {
@@ -24,7 +23,6 @@
     onDownload,
     onPrev,
     onNext,
-    onToggleControls,
   }: Props = $props();
 
   let viewerEl = $state<HTMLDivElement | null>(null);
@@ -78,28 +76,19 @@
       return;
     }
 
-    if (pointerMoved) {
-      onToggleControls();
+    if (elapsed > TAP_MAX_MS || Math.abs(dx) > TAP_THRESHOLD) {
       return;
     }
 
-    if (elapsed < TAP_MAX_MS && Math.abs(dx) < TAP_THRESHOLD) {
-      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-      const relativeX = e.clientX - rect.left;
-      const zone = relativeX / rect.width;
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const relativeX = e.clientX - rect.left;
+    const zone = relativeX / rect.width;
 
-      if (zone < LEFT_ZONE_RATIO) {
-        onPrev();
-      } else {
-        onNext();
-      }
+    if (zone < LEFT_ZONE_RATIO) {
+      onPrev();
     } else {
-      onToggleControls();
+      onNext();
     }
-  }
-
-  function handlePointerLeave() {
-    pointerActive = false;
   }
 </script>
 
@@ -109,6 +98,9 @@
   class:turning-forward={pageTurning === "forward"}
   class:turning-back={pageTurning === "backward"}
   role="presentation"
+  onpointerdown={book?.format === "epub" ? handlePointerDown : undefined}
+  onpointermove={book?.format === "epub" ? handlePointerMove : undefined}
+  onpointerup={book?.format === "epub" ? handlePointerUp : undefined}
 >
   {#if loading}
     <p class="reader-status">Loading...</p>
@@ -129,47 +121,26 @@
     </div>
   {:else if book.format === "epub"}
     <div class="epub-reader" bind:this={viewerEl}></div>
-    <div
-      class="touch-layer"
-      onpointerdown={handlePointerDown}
-      onpointermove={handlePointerMove}
-      onpointerup={handlePointerUp}
-      onpointerleave={handlePointerLeave}
-      onpointercancel={handlePointerLeave}
-      role="presentation"
-    >
-      <div class="touch-zone touch-zone-left"></div>
-      <div class="touch-zone touch-zone-right"></div>
-    </div>
   {/if}
 </div>
 
 <style>
   .reader-main {
     flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
     position: relative;
+    overflow: hidden;
     min-height: 0;
-    transition: transform 0.2s ease-out, opacity 0.2s ease-out;
-  }
-
-  .reader-main.page-turning {
-    transition: transform 0.18s ease-out, opacity 0.18s ease-out;
-  }
-  .reader-main.turning-forward {
-    transform: translateX(-8px);
-    opacity: 0.85;
-  }
-  .reader-main.turning-back {
-    transform: translateX(8px);
-    opacity: 0.85;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
   }
 
   .reader-status {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     color: #888;
     font-size: 0.95rem;
   }
@@ -178,47 +149,37 @@
   }
 
   .epub-reader {
-    width: 100%;
-    height: 100%;
+    position: absolute;
+    inset: 0;
     overflow: hidden;
-    position: relative;
+    transition: opacity 0.12s ease-out;
+  }
+  .reader-main.turning-forward .epub-reader,
+  .reader-main.turning-back .epub-reader {
+    opacity: 0.88;
   }
   .epub-reader :global(iframe) {
     border: none;
     width: 100%;
     height: 100%;
     background: transparent;
-  }
-
-  .touch-layer {
-    position: absolute;
-    inset: 0;
-    z-index: 3;
-    display: flex;
-    touch-action: none;
-    -webkit-user-select: none;
-    user-select: none;
-  }
-
-  .touch-zone {
-    height: 100%;
-  }
-  .touch-zone-left {
-    width: 30%;
-  }
-  .touch-zone-right {
-    width: 70%;
+    pointer-events: none !important;
   }
 
   .pdf-viewer {
-    flex: 1;
-    width: 100%;
-    height: 100%;
+    position: absolute;
+    inset: 0;
     border: none;
     display: block;
   }
 
   .unsupported-format {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
     text-align: center;
     color: inherit;
   }

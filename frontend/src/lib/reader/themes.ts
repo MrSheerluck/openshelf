@@ -18,8 +18,8 @@ export function fontFamilyCss(family: FontFamily): string {
 
 export const defaultTypography: Typography = {
   fontFamily: "serif",
-  fontSize: 100,
-  lineHeight: 1.6,
-  margin: 24,
+  fontSize: 120,
+  lineHeight: 1.5,
+  margin: 20,
   align: "left",
 };

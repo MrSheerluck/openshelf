@@ -2,6 +2,7 @@ import type { ThemeName, TocItem, Typography } from "./types";
 import { themes as defaultThemes, fontFamilyCss } from "./themes";
 
 const WORDS_PER_MINUTE = 250;
+const STYLESHEET_KEY = "openshelf-reader";
 
 export interface EpubControllerOptions {
   fileUrl: string;
@@ -17,6 +18,136 @@ function estimateReadingMinutes(sections: any[]): number {
     totalWords += text.split(/\s+/).filter(Boolean).length;
   }
   return Math.max(1, Math.ceil(totalWords / WORDS_PER_MINUTE));
+}
+
+function buildReaderCss(themeName: ThemeName, typography: Typography): string {
+  const t = defaultThemes.find((th) => th.name === themeName) ?? defaultThemes[0];
+  const fam = fontFamilyCss(typography.fontFamily);
+  const align = typography.align === "justify" ? "justify" : "left";
+  const borderColor = t.name === "dark" ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)";
+
+  return `
+    html {
+      font-size: 16px;
+      background: ${t.bg};
+      margin: 0;
+      height: 100%;
+    }
+
+    body {
+      background: ${t.bg};
+      color: ${t.fg};
+      font-family: ${fam};
+      font-size: ${(typography.fontSize / 100 * 16).toFixed(1)}px;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+      font-variant-ligatures: common-ligatures;
+      margin: 0;
+      padding: 0 ${typography.margin}px;
+      padding-top: 0 !important;
+      padding-bottom: 0 !important;
+      height: 100%;
+      width: 100%;
+    }
+
+    p, li, blockquote, td, th, figcaption, dd, dt {
+      font-family: ${fam} !important;
+      font-size: inherit;
+      line-height: ${typography.lineHeight} !important;
+      text-align: ${align} !important;
+      margin: 0 0 0.35em 0 !important;
+      orphans: 2;
+      widows: 2;
+      word-spacing: 0.01em;
+      hyphens: auto;
+      -webkit-hyphens: auto;
+      -ms-hyphens: auto;
+    }
+
+    h1, h2, h3, h4, h5, h6 {
+      font-family: ${fam} !important;
+      font-weight: 600 !important;
+      line-height: ${typography.lineHeight} !important;
+      margin: 0.5em 0 0.15em 0 !important;
+    }
+
+    div, span, a {
+      font-family: ${fam} !important;
+    }
+
+    img, svg, figure, picture, canvas,
+    [class*="img"], [class*="image"], [class*="figure"],
+    [class*="illustration"], [class*="picture"], [class*="photo"] {
+      max-width: 100%;
+      max-height: 85vh;
+      height: auto;
+      width: auto;
+      display: block;
+      margin: 0.2em auto !important;
+      break-inside: auto;
+      page-break-inside: auto;
+      object-fit: scale-down;
+    }
+
+    pre, code {
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 0.9em;
+    }
+
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      overflow-wrap: break-word;
+    }
+
+    table {
+      max-width: 100%;
+      border-collapse: collapse;
+      margin: 0.3em 0 !important;
+    }
+
+    blockquote {
+      margin: 0.3em 1.5em !important;
+      padding: 0 0.8em;
+      border-left: 2px solid ${borderColor};
+    }
+
+    hr {
+      border: none;
+      border-top: 1px solid ${borderColor};
+      margin: 0.4em 0 !important;
+    }
+
+    a {
+      color: #4f46e5;
+    }
+
+    sup, sub {
+      font-size: 0.75em;
+      line-height: 0;
+    }
+
+    body > :first-child,
+    body > :first-child > :first-child,
+    body > :first-child > :first-child > :first-child,
+    body > section:first-child,
+    body > article:first-child,
+    body > div:first-child,
+    body > main:first-child,
+    body > section:first-child > :first-child,
+    body > div:first-child > :first-child,
+    body > article:first-child > :first-child {
+      margin-top: 0 !important;
+      padding-top: 0 !important;
+    }
+
+    h1:first-child, h2:first-child, h3:first-child,
+    h1:first-of-type, h2:first-of-type, h3:first-of-type {
+      margin-top: 0 !important;
+    }
+  `;
 }
 
 export class EpubController {
@@ -35,7 +166,6 @@ export class EpubController {
   private options: EpubControllerOptions;
   private mounted = false;
   private onCfiChange: ((cfi: string) => void) | null = null;
-  private spineItems: any[] = [];
 
   constructor(options: EpubControllerOptions) {
     this.options = options;
@@ -71,20 +201,22 @@ export class EpubController {
         manager: "default",
       });
 
-      defaultThemes.forEach((t) => {
-        this.rendition.themes.register(t.name, {
-          "body": {
-            "background": `${t.bg} !important`,
-            "color": `${t.fg} !important`,
-          },
-          "p, div, span, li": {
-            "color": `${t.fg} !important`,
-          },
-        });
-      });
+      const contentHooks = this.rendition.hooks.content.hooks as Function[];
+      for (let i = contentHooks.length - 1; i >= 0; i--) {
+        const fn = contentHooks[i];
+        if (fn.name === "bound adjustImages" || fn.toString().includes("break-inside")) {
+          contentHooks.splice(i, 1);
+          break;
+        }
+      }
 
-      this.applyTypography(this.options.typography);
-      this.rendition.themes.select(this.options.themeName);
+      this.rendition.hooks.render.register((view: any) => {
+        const contents = view?.contents;
+        if (contents && contents.addStylesheetCss) {
+          const css = buildReaderCss(this.options.themeName, this.options.typography);
+          contents.addStylesheetCss(css, STYLESHEET_KEY);
+        }
+      });
 
       await this.rendition.display();
 
@@ -126,12 +258,13 @@ export class EpubController {
   }
 
   setTheme(name: ThemeName): void {
-    this.rendition?.themes.select(name);
+    this.options.themeName = name;
+    this.injectToCurrentViews();
   }
 
   setTypography(typography: Typography): void {
     this.options.typography = typography;
-    this.applyTypography(typography);
+    this.injectToCurrentViews();
   }
 
   async next(): Promise<void> {
@@ -162,12 +295,14 @@ export class EpubController {
     this.mounted = false;
   }
 
-  private applyTypography(typography: Typography): void {
+  private injectToCurrentViews(): void {
     if (!this.rendition) return;
-    this.rendition.themes.fontSize(`${typography.fontSize}%`);
-    this.rendition.themes.override("line-height", { "body, p, div, li": { "line-height": `${typography.lineHeight} !important` } }, true);
-    this.rendition.themes.override("margin", { "body": { "padding-left": `${typography.margin}px !important`, "padding-right": `${typography.margin}px !important` } }, true);
-    this.rendition.themes.override("font-family", { "body, p, div, span, li": { "font-family": `${fontFamilyCss(typography.fontFamily)} !important` } }, true);
-    this.rendition.themes.override("text-align", { "body, p, div, li": { "text-align": `${typography.align === "justify" ? "justify" : "left"} !important` } }, true);
+    const css = buildReaderCss(this.options.themeName, this.options.typography);
+    const contentsList = this.rendition.getContents();
+    for (const contents of contentsList) {
+      if (contents && contents.addStylesheetCss) {
+        contents.addStylesheetCss(css, STYLESHEET_KEY);
+      }
+    }
   }
 }

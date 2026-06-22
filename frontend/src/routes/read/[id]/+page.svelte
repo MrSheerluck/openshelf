@@ -177,12 +177,6 @@
     });
   }
 
-  function toggleControls() {
-    if (showToc || showTypography) return;
-    showControls = !showControls;
-    if (showControls) scheduleAutoHide();
-  }
-
   let idleTimer: ReturnType<typeof setTimeout> | null = null;
 
   function scheduleAutoHide() {
@@ -261,7 +255,6 @@
     onDownload={downloadFile}
     onPrev={prevPage}
     onNext={nextPage}
-    onToggleControls={toggleControls}
   />
 
   {#if book?.format === "epub" && !loading && !error}

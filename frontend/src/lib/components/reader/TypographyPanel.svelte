@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Alignment, FontFamily, ThemeName, Typography } from "$lib/reader/types";
+  import type { FontFamily, ThemeName, Typography } from "$lib/reader/types";
   import { fontFamilies, themes } from "$lib/reader/themes";
 
   interface Props {
@@ -25,19 +25,7 @@
   }
 
   function setFontSize(value: number) {
-    onChange({ ...typography, fontSize: Math.max(70, Math.min(180, value)) });
-  }
-
-  function setLineHeight(value: number) {
-    onChange({ ...typography, lineHeight: Math.round(value * 10) / 10 });
-  }
-
-  function setMargin(value: number) {
-    onChange({ ...typography, margin: Math.max(0, Math.min(80, value)) });
-  }
-
-  function toggleAlign() {
-    onChange({ ...typography, align: typography.align === "justify" ? "left" : "justify" });
+    onChange({ ...typography, fontSize: Math.max(80, Math.min(200, value)) });
   }
 </script>
 
@@ -71,7 +59,7 @@
       <div class="size-row">
         <button class="size-btn" onclick={() => setFontSize(typography.fontSize - 10)} aria-label="Decrease">A-</button>
         <div class="size-presets">
-          {#each [70, 85, 100, 120, 140, 160, 180] as preset}
+          {#each [80, 100, 120, 140, 160, 180, 200] as preset}
             <button
               class="preset-dot"
               class:active={typography.fontSize === preset}
@@ -81,64 +69,6 @@
           {/each}
         </div>
         <button class="size-btn" onclick={() => setFontSize(typography.fontSize + 10)} aria-label="Increase">A+</button>
-      </div>
-    </section>
-
-    <section class="typo-section">
-      <div class="typo-label-row">
-        <span class="typo-label">Line spacing</span>
-        <span class="typo-value">{typography.lineHeight.toFixed(1)}</span>
-      </div>
-      <div class="spacing-presets">
-        {#each [1.2, 1.4, 1.6, 1.8, 2.0, 2.2] as sp}
-          <button
-            class="spacing-btn"
-            class:active={typography.lineHeight === sp}
-            onclick={() => setLineHeight(sp)}
-          >
-            <span class="spacing-visual">
-              {#each { length: Math.round(sp * 3) } as _, j}
-                <span class="spacing-line"></span>
-              {/each}
-            </span>
-          </button>
-        {/each}
-      </div>
-    </section>
-
-    <section class="typo-section">
-      <div class="typo-label-row">
-        <span class="typo-label">Margins</span>
-        <span class="typo-value">{typography.margin}px</span>
-      </div>
-      <div class="margin-presets">
-        {#each [0, 12, 24, 40, 56, 72] as m}
-          <button
-            class="margin-btn"
-            class:active={typography.margin === m}
-            onclick={() => setMargin(m)}
-            aria-label="Margin {m}px"
-          >
-            <span class="margin-icon" style="padding-inline: {Math.max(1, m / 8)}px">
-              <span class="margin-block"></span>
-            </span>
-          </button>
-        {/each}
-      </div>
-    </section>
-
-    <section class="typo-section">
-      <div class="typo-label-row">
-        <span class="typo-label">Text align</span>
-        <button
-          class="toggle"
-          class:on={typography.align === "justify"}
-          onclick={toggleAlign}
-          aria-label="Toggle justified text"
-          aria-pressed={typography.align === "justify"}
-        >
-          <span class="toggle-knob"></span>
-        </button>
       </div>
     </section>
 
@@ -186,7 +116,7 @@
 
   .typo-panel {
     width: 100%;
-    max-width: 520px;
+    max-width: 420px;
     background: var(--reader-panel-bg, #fff);
     color: var(--reader-panel-fg, #1a1a1a);
     border-top-left-radius: 16px;
@@ -194,8 +124,6 @@
     padding: 0.5rem 1.25rem 2rem;
     box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.2);
     animation: slide-up 0.22s ease-out;
-    max-height: 85vh;
-    overflow-y: auto;
   }
 
   @keyframes slide-up {
@@ -319,79 +247,6 @@
     transform: scale(1.1);
   }
 
-  .spacing-presets {
-    display: flex;
-    gap: 0.5rem;
-  }
-
-  .spacing-btn {
-    flex: 1;
-    background: none;
-    border: 1px solid var(--reader-border, rgba(0, 0, 0, 0.12));
-    border-radius: 8px;
-    padding: 0.5rem;
-    cursor: pointer;
-    transition: border-color 0.15s;
-  }
-  .spacing-btn:hover {
-    background: var(--reader-hover, rgba(0, 0, 0, 0.04));
-  }
-  .spacing-btn.active {
-    border-color: #4f46e5;
-    background: rgba(79, 70, 229, 0.06);
-  }
-
-  .spacing-visual {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    align-items: center;
-  }
-
-  .spacing-line {
-    width: 70%;
-    height: 2px;
-    background: var(--reader-panel-fg, #1a1a1a);
-    opacity: 0.3;
-    border-radius: 1px;
-  }
-
-  .margin-presets {
-    display: flex;
-    gap: 0.5rem;
-  }
-
-  .margin-btn {
-    flex: 1;
-    background: none;
-    border: 1px solid var(--reader-border, rgba(0, 0, 0, 0.12));
-    border-radius: 8px;
-    padding: 0.5rem;
-    cursor: pointer;
-    transition: border-color 0.15s;
-  }
-  .margin-btn:hover {
-    background: var(--reader-hover, rgba(0, 0, 0, 0.04));
-  }
-  .margin-btn.active {
-    border-color: #4f46e5;
-    background: rgba(79, 70, 229, 0.06);
-  }
-
-  .margin-icon {
-    display: flex;
-    justify-content: center;
-  }
-
-  .margin-block {
-    display: block;
-    height: 14px;
-    width: 100%;
-    background: var(--reader-panel-fg, #1a1a1a);
-    opacity: 0.2;
-    border-radius: 2px;
-  }
-
   .theme-options {
     display: flex;
     gap: 0.5rem;
@@ -430,36 +285,6 @@
     font-size: 0.7rem;
     color: var(--reader-panel-fg, #1a1a1a);
     opacity: 0.8;
-  }
-
-  .toggle {
-    width: 44px;
-    height: 24px;
-    background: var(--reader-border, rgba(0, 0, 0, 0.2));
-    border: none;
-    border-radius: 999px;
-    position: relative;
-    cursor: pointer;
-    padding: 0;
-    transition: background 0.15s;
-    flex-shrink: 0;
-  }
-  .toggle.on {
-    background: #4f46e5;
-  }
-  .toggle-knob {
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 20px;
-    height: 20px;
-    background: #fff;
-    border-radius: 50%;
-    transition: transform 0.15s;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
-  }
-  .toggle.on .toggle-knob {
-    transform: translateX(20px);
   }
 
   .reading-progress {
