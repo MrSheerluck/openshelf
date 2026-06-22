@@ -266,31 +266,44 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<div class="reader-app" class:dark={theme === "dark"} class:sepia={theme === "sepia"}>
-  <header class="reader-header" class:hidden={!showControls}>
+<div
+  class="reader-app"
+  class:dark={book?.format === "epub" && theme === "dark"}
+  class:sepia={book?.format === "epub" && theme === "sepia"}
+  class:pdf={book?.format === "pdf"}
+>
+  <header class="reader-header" class:hidden={book?.format === "epub" && !showControls}>
     <button class="icon-btn" onclick={goBack} title="Back to library">&larr;</button>
-    <button class="icon-btn" onclick={() => (showToc = !showToc)} title="Contents">&#9776;</button>
+    {#if book?.format === "epub"}
+      <button class="icon-btn" onclick={() => (showToc = !showToc)} title="Contents">&#9776;</button>
+    {/if}
     <span class="reader-title">{book?.title ?? "Loading..."}</span>
     <span class="reader-spacer"></span>
-    <div class="theme-controls">
-      {#each themes as t}
-        <button
-          class="theme-btn"
-          class:active={theme === t.name}
-          onclick={() => setTheme(t.name)}
-          title={t.name}
-        >
-          <span class="theme-swatch" style="background: {t.bg}; color: {t.fg};">A</span>
-        </button>
-      {/each}
-    </div>
-    <div class="size-controls">
-      <button class="size-btn" onclick={() => changeFontSize(-10)}>A-</button>
-      <button class="size-btn" onclick={() => changeFontSize(10)}>A+</button>
-    </div>
+    {#if book?.format === "epub"}
+      <div class="theme-controls">
+        {#each themes as t}
+          <button
+            class="theme-btn"
+            class:active={theme === t.name}
+            onclick={() => setTheme(t.name)}
+            title={t.name}
+          >
+            <span class="theme-swatch" style="background: {t.bg}; color: {t.fg};">A</span>
+          </button>
+        {/each}
+      </div>
+      <div class="size-controls">
+        <button class="size-btn" onclick={() => changeFontSize(-10)}>A-</button>
+        <button class="size-btn" onclick={() => changeFontSize(10)}>A+</button>
+      </div>
+    {/if}
   </header>
 
-  <main class="reader-main" onclick={() => (showControls = !showControls)} role="presentation">
+  <main
+    class="reader-main"
+    onclick={book?.format === "epub" ? () => (showControls = !showControls) : undefined}
+    role="presentation"
+  >
     {#if loading}
       <p class="reader-status">Loading...</p>
     {:else if error}
@@ -322,7 +335,7 @@
     </footer>
   {/if}
 
-  {#if showToc && toc.length > 0}
+  {#if showToc && toc.length > 0 && book?.format === "epub"}
     <div class="toc-overlay" onclick={() => (showToc = false)}>
       <aside class="toc-panel" onclick={(e) => e.stopPropagation()}>
         <h3>Table of Contents</h3>
@@ -369,6 +382,9 @@
     background: #f4ecd8;
     color: #3a2f1c;
   }
+  .reader-app.pdf {
+    background: #525659;
+  }
 
   .reader-header {
     display: flex;
@@ -379,6 +395,18 @@
     border-bottom: 1px solid rgba(0, 0, 0, 0.1);
     flex-shrink: 0;
     transition: opacity 0.2s, transform 0.2s;
+  }
+  .reader-app.pdf .reader-header {
+    background: #323639;
+    color: #d4d4d4;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  .reader-app.pdf .icon-btn {
+    color: #d4d4d4;
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+  .reader-app.pdf .icon-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
   }
   .reader-app.dark .reader-header {
     border-bottom-color: rgba(255, 255, 255, 0.1);
@@ -479,9 +507,11 @@
   }
 
   .pdf-viewer {
+    flex: 1;
     width: 100%;
     height: 100%;
     border: none;
+    display: block;
   }
 
   .nav-btn {
