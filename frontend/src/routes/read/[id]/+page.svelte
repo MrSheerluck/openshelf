@@ -2,38 +2,35 @@
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
   import { api } from "$lib/api";
+  import type { Book, ThemeName, Typography } from "$lib/reader/types";
+  import { ReaderSettingsStore } from "$lib/reader/settings.svelte";
+  import { EpubController } from "$lib/reader/epub.svelte";
+  import ReaderHeader from "$lib/components/reader/ReaderHeader.svelte";
+  import ReaderFooter from "$lib/components/reader/ReaderFooter.svelte";
+  import TocPanel from "$lib/components/reader/TocPanel.svelte";
+  import BookViewport from "$lib/components/reader/BookViewport.svelte";
+  import TypographyPanel from "$lib/components/reader/TypographyPanel.svelte";
 
-  interface Book {
-    id: string;
-    title: string;
-    author: string | null;
-    format: string;
-  }
-
-  type Theme = "light" | "dark" | "sepia";
-  const themes: { name: Theme; bg: string; fg: string }[] = [
-    { name: "light", bg: "#ffffff", fg: "#1a1a1a" },
-    { name: "sepia", bg: "#f4ecd8", fg: "#3a2f1c" },
-    { name: "dark", bg: "#1a1a1a", fg: "#d4d4d4" },
-  ];
+  const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
+  const IDLE_HIDE_MS = 3000;
+  const id = $derived(String(page.params.id));
 
   let book = $state<Book | null>(null);
   let loading = $state(true);
   let error = $state("");
-  let viewerEl = $state<HTMLDivElement | null>(null);
-  let rendition: any = null;
-  let bookObj: any = null;
   let fileBlobUrl = $state<string | null>(null);
-  let theme = $state<Theme>("light");
-  let fontSize = $state(100);
   let showControls = $state(true);
   let showToc = $state(false);
-  let toc = $state<any[]>([]);
-  let progress = $state(0);
-  let currentChapter = $state("");
+  let showTypography = $state(false);
 
-  const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
-  const id = $derived(String(page.params.id));
+  let settings = $state<ReaderSettingsStore | null>(null);
+  let controller = $state<EpubController | null>(null);
+
+  let minutesLeft = $derived(
+    controller?.estimatedBookMinutes
+      ? Math.max(1, Math.round(controller.estimatedBookMinutes * (1 - (controller?.progress ?? 0) / 100)))
+      : 0
+  );
 
   function fileUrl(): string {
     return `${API_URL}/api/books/${id}/file`;
@@ -50,20 +47,6 @@
     } catch {
       return null;
     }
-  }
-
-  function getStoredSettings() {
-    try {
-      const stored = localStorage.getItem(`openshelf:reader:${id}`);
-      if (stored) return JSON.parse(stored);
-    } catch {}
-    return null;
-  }
-
-  function setStoredSettings(settings: { theme: Theme; fontSize: number; cfi?: string }) {
-    try {
-      localStorage.setItem(`openshelf:reader:${id}`, JSON.stringify(settings));
-    } catch {}
   }
 
   async function saveProgress(cfi: string) {
@@ -92,97 +75,13 @@
     }
   }
 
-  async function renderEpub() {
-    if (!viewerEl || !book) return;
-    try {
-      const ePub = (await import("epubjs")).default;
-
-      bookObj = ePub(fileUrl(), {
-        openAs: "epub",
-        requestMethod: async (url: string) => {
-          const res = await fetch(url, { credentials: "include" });
-          if (!res.ok) {
-            throw new Error(`Failed to fetch book: ${res.status} ${res.statusText}`);
-          }
-          return await res.arrayBuffer();
-        },
-      });
-
-      rendition = bookObj.renderTo(viewerEl, {
-        width: "100%",
-        height: "100%",
-        flow: "paginated",
-        spread: "none",
-        manager: "default",
-      });
-
-      themes.forEach((t) => {
-        rendition.themes.register(t.name, {
-          "body": {
-            "background": `${t.bg} !important`,
-            "color": `${t.fg} !important`,
-          },
-          "p, div, span, li": {
-            "color": `${t.fg} !important`,
-          },
-        });
-      });
-
-      rendition.themes.fontSize(`${fontSize}%`);
-
-      const stored = getStoredSettings();
-      if (stored) {
-        theme = stored.theme ?? "light";
-        fontSize = stored.fontSize ?? 100;
-        rendition.themes.select(theme);
-        rendition.themes.fontSize(`${fontSize}%`);
-      }
-
-      await rendition.display();
-
-      if (stored?.cfi) {
-        await rendition.display(stored.cfi);
-      }
-
-      toc = (bookObj.navigation.toc ?? []).map((item: any) => ({
-        label: item.label,
-        href: item.href,
-        subitems: item.subitems ?? [],
-      }));
-
-      bookObj.ready.then(async () => {
-        if (bookObj.locations.length() === 0) {
-          await bookObj.locations.generate(1024);
-        }
-      });
-
-      rendition.on("relocated", (location: any) => {
-        progress = Math.round((location.start.percentage ?? 0) * 100);
-        currentChapter = location.start.href ?? "";
-        const cfi = location.start.cfi;
-        if (cfi) {
-          setStoredSettings({ theme, fontSize, cfi });
-          saveProgress(cfi);
-        }
-      });
-    } catch (e) {
-      console.error("EPUB render error:", e);
-      error = `Failed to render book: ${e instanceof Error ? e.message : String(e)}`;
-      loading = false;
-    }
-  }
-
   $effect(() => {
     loadBook();
   });
 
   $effect(() => {
     if (!book) return;
-    if (book.format === "epub") {
-      if (viewerEl) {
-        renderEpub();
-      }
-    } else if (book.format === "pdf") {
+    if (book.format === "pdf") {
       prefetchFileBlob().then((url) => {
         if (url) {
           loading = false;
@@ -195,14 +94,6 @@
       loading = false;
     }
     return () => {
-      if (rendition) {
-        rendition.destroy();
-        rendition = null;
-      }
-      if (bookObj) {
-        bookObj.destroy();
-        bookObj = null;
-      }
       if (fileBlobUrl) {
         URL.revokeObjectURL(fileBlobUrl);
         fileBlobUrl = null;
@@ -210,32 +101,58 @@
     };
   });
 
-  function setTheme(t: Theme) {
-    theme = t;
-    if (rendition) rendition.themes.select(t);
-    setStoredSettings({ theme, fontSize });
+  function handleViewerMount(el: HTMLDivElement) {
+    if (!book || book.format !== "epub" || controller) return;
+    if (!settings) {
+      settings = new ReaderSettingsStore(id);
+    }
+    const stored = settings.load();
+    const c = new EpubController({
+      fileUrl: fileUrl(),
+      typography: settings.typography,
+      themeName: settings.theme,
+      initialCfi: stored.cfi,
+    });
+    c.onProgress((cfi) => {
+      if (settings) settings.save({ cfi });
+      saveProgress(cfi);
+    });
+    controller = c;
+    c.mount(el);
   }
 
-  function changeFontSize(delta: number) {
-    fontSize = Math.max(70, Math.min(180, fontSize + delta));
-    if (rendition) rendition.themes.fontSize(`${fontSize}%`);
-    setStoredSettings({ theme, fontSize });
+  function setTheme(t: ThemeName) {
+    if (!settings) return;
+    settings.theme = t;
+    controller?.setTheme(t);
+    settings.save();
+  }
+
+  function setTypography(typography: Typography) {
+    if (!settings) return;
+    settings.typography = typography;
+    controller?.setTypography(typography);
+    settings.save();
   }
 
   function prevPage() {
-    if (rendition) rendition.prev();
+    controller?.prev();
   }
 
   function nextPage() {
-    if (rendition) rendition.next();
+    controller?.next();
   }
 
   function goToChapter(href: string) {
-    if (rendition) rendition.display(href);
+    controller?.display(href);
     showToc = false;
   }
 
   function handleKeydown(e: KeyboardEvent) {
+    if (showTypography && e.key === "Escape") {
+      showTypography = false;
+      return;
+    }
     if (book?.format !== "epub") return;
     if (showToc) {
       if (e.key === "Escape") showToc = false;
@@ -250,117 +167,132 @@
     goto("/");
   }
 
-  async function downloadFile() {
-    const url = await prefetchFileBlob();
-    if (!url) return;
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = book?.title ?? "book";
-    a.click();
+  function downloadFile() {
+    prefetchFileBlob().then((url) => {
+      if (!url) return;
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = book?.title ?? "book";
+      a.click();
+    });
   }
+
+  function toggleControls() {
+    if (showToc || showTypography) return;
+    showControls = !showControls;
+    if (showControls) scheduleAutoHide();
+  }
+
+  let idleTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function scheduleAutoHide() {
+    if (idleTimer) clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => {
+      if (!showToc && !showTypography) showControls = false;
+    }, IDLE_HIDE_MS);
+  }
+
+  function handleActivity() {
+    if (!showControls) showControls = true;
+    scheduleAutoHide();
+  }
+
+  $effect(() => {
+    if (showToc || showTypography) {
+      if (idleTimer) {
+        clearTimeout(idleTimer);
+        idleTimer = null;
+      }
+      showControls = true;
+      return;
+    }
+    scheduleAutoHide();
+    return () => {
+      if (idleTimer) {
+        clearTimeout(idleTimer);
+        idleTimer = null;
+      }
+    };
+  });
+
+  $effect(() => {
+    return () => {
+      if (controller) {
+        controller.destroy();
+        controller = null;
+      }
+    };
+  });
 </script>
 
 <svelte:head>
   <title>{book?.title ?? "Reader"} - OpenShelf</title>
 </svelte:head>
 
-<svelte:window onkeydown={handleKeydown} />
+<svelte:window
+  onkeydown={handleKeydown}
+  onpointermove={handleActivity}
+  ontouchstart={handleActivity}
+/>
 
 <div
   class="reader-app"
-  class:dark={book?.format === "epub" && theme === "dark"}
-  class:sepia={book?.format === "epub" && theme === "sepia"}
+  class:dark={book?.format === "epub" && settings?.theme === "dark"}
+  class:sepia={book?.format === "epub" && settings?.theme === "sepia"}
   class:pdf={book?.format === "pdf"}
 >
-  <header class="reader-header" class:hidden={book?.format === "epub" && !showControls}>
-    <button class="icon-btn" onclick={goBack} title="Back to library">&larr;</button>
-    {#if book?.format === "epub"}
-      <button class="icon-btn" onclick={() => (showToc = !showToc)} title="Contents">&#9776;</button>
-    {/if}
-    <span class="reader-title">{book?.title ?? "Loading..."}</span>
-    <span class="reader-spacer"></span>
-    {#if book?.format === "epub"}
-      <div class="theme-controls">
-        {#each themes as t}
-          <button
-            class="theme-btn"
-            class:active={theme === t.name}
-            onclick={() => setTheme(t.name)}
-            title={t.name}
-          >
-            <span class="theme-swatch" style="background: {t.bg}; color: {t.fg};">A</span>
-          </button>
-        {/each}
-      </div>
-      <div class="size-controls">
-        <button class="size-btn" onclick={() => changeFontSize(-10)}>A-</button>
-        <button class="size-btn" onclick={() => changeFontSize(10)}>A+</button>
-      </div>
-    {/if}
-  </header>
+  <div class="reader-header-wrap" class:hidden={book?.format === "epub" && !showControls}>
+    <ReaderHeader
+      title={book?.title ?? "Loading..."}
+      showTocButton={book?.format === "epub"}
+      onBack={goBack}
+      onToggleToc={() => (showToc = !showToc)}
+      onToggleTypography={() => (showTypography = !showTypography)}
+    />
+  </div>
 
-  <main
-    class="reader-main"
-    onclick={book?.format === "epub" ? () => (showControls = !showControls) : undefined}
-    role="presentation"
-  >
-    {#if loading}
-      <p class="reader-status">Loading...</p>
-    {:else if error}
-      <p class="reader-status error">{error}</p>
-    {:else if book?.format === "pdf"}
-      {#if fileBlobUrl}
-        <iframe src={fileBlobUrl} title="PDF viewer" class="pdf-viewer"></iframe>
-      {:else}
-        <p class="reader-status">Loading PDF...</p>
-      {/if}
-    {:else if book?.format === "mobi"}
-      <div class="unsupported-format">
-        <p>MOBI files cannot be displayed in the browser.</p>
-        <button class="download-btn" onclick={downloadFile}>Download file</button>
-      </div>
-    {:else}
-      <div class="epub-reader" bind:this={viewerEl}></div>
-    {/if}
-  </main>
+  <BookViewport
+    {book}
+    {fileBlobUrl}
+    {loading}
+    {error}
+    pageTurning={controller?.pageTurning ?? null}
+    onViewerMount={handleViewerMount}
+    onDownload={downloadFile}
+    onPrev={prevPage}
+    onNext={nextPage}
+    onToggleControls={toggleControls}
+  />
 
   {#if book?.format === "epub" && !loading && !error}
-    <button class="nav-btn nav-prev" onclick={(e) => { e.stopPropagation(); prevPage(); }}>&lsaquo;</button>
-    <button class="nav-btn nav-next" onclick={(e) => { e.stopPropagation(); nextPage(); }}>&rsaquo;</button>
-    <footer class="reader-footer" class:hidden={!showControls}>
-      <span class="progress-text">{progress}%</span>
-      <div class="progress-bar">
-        <div class="progress-fill" style="width: {progress}%"></div>
-      </div>
-    </footer>
+    <div class="reader-footer-wrap" class:hidden={!showControls}>
+      <ReaderFooter
+        progress={controller?.progress ?? 0}
+        minutesLeft={minutesLeft}
+        totalSections={controller?.totalSections ?? 0}
+        currentSectionIndex={controller?.currentSectionIndex ?? 0}
+      />
+    </div>
   {/if}
 
-  {#if showToc && toc.length > 0 && book?.format === "epub"}
-    <div class="toc-overlay" onclick={() => (showToc = false)}>
-      <aside class="toc-panel" onclick={(e) => e.stopPropagation()}>
-        <h3>Table of Contents</h3>
-        <ul class="toc-list">
-          {#each toc as item}
-            <li>
-              <button class="toc-link" onclick={() => goToChapter(item.href)}>
-                {item.label}
-              </button>
-              {#if item.subitems && item.subitems.length > 0}
-                <ul class="toc-sublist">
-                  {#each item.subitems as sub}
-                    <li>
-                      <button class="toc-link" onclick={() => goToChapter(sub.href)}>
-                        {sub.label}
-                      </button>
-                    </li>
-                  {/each}
-                </ul>
-              {/if}
-            </li>
-          {/each}
-        </ul>
-      </aside>
-    </div>
+  {#if showToc && controller && controller.toc.length > 0 && book?.format === "epub"}
+    <TocPanel
+      items={controller.toc}
+      currentChapter={controller.currentChapter}
+      onSelect={goToChapter}
+      onClose={() => (showToc = false)}
+    />
+  {/if}
+
+  {#if showTypography && settings && book?.format === "epub"}
+    <TypographyPanel
+      typography={settings.typography}
+      theme={settings.theme}
+      progress={controller?.progress ?? 0}
+      onChange={setTypography}
+      onSetTheme={setTheme}
+      onClose={() => (showTypography = false)}
+    />
   {/if}
 </div>
 
@@ -370,301 +302,65 @@
     flex-direction: column;
     height: 100vh;
     font-family: system-ui, sans-serif;
-    background: #fff;
-    color: #1a1a1a;
+    background: var(--reader-bg, #fff);
+    color: var(--reader-fg, #1a1a1a);
     transition: background 0.2s, color 0.2s;
+    --reader-bg: #ffffff;
+    --reader-fg: #1a1a1a;
+    --reader-border: rgba(0, 0, 0, 0.1);
+    --reader-hover: rgba(0, 0, 0, 0.05);
+    --reader-panel-bg: #ffffff;
+    --reader-panel-fg: #1a1a1a;
+    --reader-muted: #9ca3af;
+    --reader-progress-track: rgba(0, 0, 0, 0.1);
   }
   .reader-app.dark {
-    background: #1a1a1a;
-    color: #d4d4d4;
+    --reader-bg: #1a1a1a;
+    --reader-fg: #d4d4d4;
+    --reader-border: rgba(255, 255, 255, 0.1);
+    --reader-hover: rgba(255, 255, 255, 0.05);
+    --reader-panel-bg: #1a1a1a;
+    --reader-panel-fg: #d4d4d4;
+    --reader-muted: #9ca3af;
+    --reader-progress-track: rgba(255, 255, 255, 0.1);
   }
   .reader-app.sepia {
-    background: #f4ecd8;
-    color: #3a2f1c;
+    --reader-bg: #f4ecd8;
+    --reader-fg: #3a2f1c;
+    --reader-panel-bg: #f4ecd8;
+    --reader-panel-fg: #3a2f1c;
+    --reader-muted: #8b7d6b;
+    --reader-border: rgba(58, 47, 28, 0.12);
+    --reader-hover: rgba(58, 47, 28, 0.06);
+    --reader-progress-track: rgba(58, 47, 28, 0.12);
   }
   .reader-app.pdf {
-    background: #525659;
+    --reader-bg: #525659;
+    --reader-fg: #d4d4d4;
   }
 
-  .reader-header {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 1rem;
-    background: inherit;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-    flex-shrink: 0;
-    transition: opacity 0.2s, transform 0.2s;
+  .reader-header-wrap {
+    position: relative;
+    z-index: 10;
+    transition: opacity 0.25s, transform 0.25s;
   }
-  .reader-app.pdf .reader-header {
-    background: #323639;
-    color: #d4d4d4;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  }
-  .reader-app.pdf .icon-btn {
-    color: #d4d4d4;
-    border-color: rgba(255, 255, 255, 0.2);
-  }
-  .reader-app.pdf .icon-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
-  }
-  .reader-app.dark .reader-header {
-    border-bottom-color: rgba(255, 255, 255, 0.1);
-  }
-  .reader-header.hidden {
+  .reader-header-wrap.hidden {
     opacity: 0;
     transform: translateY(-100%);
     pointer-events: none;
   }
 
-  .icon-btn {
-    background: none;
-    border: 1px solid rgba(0, 0, 0, 0.15);
-    border-radius: 6px;
-    padding: 0.35rem 0.6rem;
-    cursor: pointer;
-    font-size: 1rem;
-    color: inherit;
-  }
-  .icon-btn:hover {
-    background: rgba(0, 0, 0, 0.05);
-  }
-  .reader-app.dark .icon-btn:hover {
-    background: rgba(255, 255, 255, 0.05);
-  }
-
-  .reader-title {
-    font-size: 0.9rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 30vw;
-  }
-
-  .reader-spacer {
-    flex: 1;
-  }
-
-  .theme-controls, .size-controls {
-    display: flex;
-    gap: 0.25rem;
-  }
-
-  .theme-btn, .size-btn {
-    background: none;
-    border: 1px solid rgba(0, 0, 0, 0.15);
-    border-radius: 6px;
-    cursor: pointer;
-    padding: 0.25rem 0.5rem;
-    color: inherit;
-    font-size: 0.85rem;
-  }
-  .theme-btn.active {
-    border-color: #4f46e5;
-  }
-
-  .theme-swatch {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 22px;
-    height: 22px;
-    border-radius: 4px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    border: 1px solid rgba(0, 0, 0, 0.2);
-  }
-
-  .reader-main {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
-    position: relative;
-  }
-
-  .reader-status {
-    color: #888;
-    font-size: 0.95rem;
-  }
-  .reader-status.error {
-    color: #dc2626;
-  }
-
-  .epub-reader {
-    width: 100%;
-    height: 100%;
-    overflow: hidden;
-  }
-
-  :global(.epub-reader iframe) {
-    border: none;
-    width: 100%;
-    height: 100%;
-    background: transparent;
-  }
-
-  .pdf-viewer {
-    flex: 1;
-    width: 100%;
-    height: 100%;
-    border: none;
-    display: block;
-  }
-
-  .nav-btn {
-    position: fixed;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 44px;
-    height: 60px;
-    border: 1px solid rgba(0, 0, 0, 0.1);
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.7);
-    font-size: 1.5rem;
-    cursor: pointer;
-    color: #555;
-    backdrop-filter: blur(8px);
-    z-index: 5;
-    transition: background 0.15s;
-  }
-  .nav-btn:hover {
-    background: rgba(255, 255, 255, 0.95);
-  }
-  .reader-app.dark .nav-btn {
-    background: rgba(40, 40, 40, 0.7);
-    color: #d4d4d4;
-    border-color: rgba(255, 255, 255, 0.1);
-  }
-  .reader-app.dark .nav-btn:hover {
-    background: rgba(40, 40, 40, 0.95);
-  }
-  .nav-prev {
-    left: 0.5rem;
-  }
-  .nav-next {
-    right: 0.5rem;
-  }
-
-  .reader-footer {
+  .reader-footer-wrap {
     position: fixed;
     bottom: 0;
     left: 0;
     right: 0;
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.5rem 1rem;
-    background: rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(8px);
-    border-top: 1px solid rgba(0, 0, 0, 0.1);
-    transition: opacity 0.2s, transform 0.2s;
+    z-index: 4;
+    transition: opacity 0.25s, transform 0.25s;
   }
-  .reader-app.dark .reader-footer {
-    background: rgba(30, 30, 30, 0.9);
-    border-top-color: rgba(255, 255, 255, 0.1);
-  }
-  .reader-footer.hidden {
+  .reader-footer-wrap.hidden {
     opacity: 0;
     transform: translateY(100%);
     pointer-events: none;
-  }
-  .progress-text {
-    font-size: 0.8rem;
-    color: inherit;
-    min-width: 3rem;
-  }
-  .progress-bar {
-    flex: 1;
-    height: 4px;
-    background: rgba(0, 0, 0, 0.1);
-    border-radius: 2px;
-    overflow: hidden;
-  }
-  .reader-app.dark .progress-bar {
-    background: rgba(255, 255, 255, 0.1);
-  }
-  .progress-fill {
-    height: 100%;
-    background: #4f46e5;
-    transition: width 0.3s;
-  }
-
-  .unsupported-format {
-    text-align: center;
-    color: inherit;
-  }
-  .unsupported-format p {
-    margin-bottom: 0.75rem;
-  }
-  .download-btn {
-    display: inline-block;
-    padding: 0.5rem 1rem;
-    border: 1px solid rgba(0, 0, 0, 0.15);
-    border-radius: 6px;
-    cursor: pointer;
-    color: inherit;
-    font-size: 0.9rem;
-    background: transparent;
-  }
-  .download-btn:hover {
-    background: rgba(0, 0, 0, 0.05);
-  }
-
-  .toc-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.4);
-    display: flex;
-    z-index: 50;
-  }
-  .toc-panel {
-    width: 320px;
-    max-width: 90vw;
-    background: #fff;
-    color: #1a1a1a;
-    overflow-y: auto;
-    padding: 1.5rem;
-    box-shadow: 4px 0 20px rgba(0, 0, 0, 0.2);
-  }
-  .reader-app.dark .toc-panel {
-    background: #1a1a1a;
-    color: #d4d4d4;
-  }
-  .reader-app.sepia .toc-panel {
-    background: #f4ecd8;
-    color: #3a2f1c;
-  }
-  .toc-panel h3 {
-    margin: 0 0 1rem 0;
-    font-size: 1.1rem;
-  }
-  .toc-list, .toc-sublist {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-  }
-  .toc-sublist {
-    margin-left: 1rem;
-  }
-  .toc-link {
-    display: block;
-    width: 100%;
-    text-align: left;
-    background: none;
-    border: none;
-    padding: 0.4rem 0.5rem;
-    border-radius: 4px;
-    cursor: pointer;
-    color: inherit;
-    font-size: 0.9rem;
-  }
-  .toc-link:hover {
-    background: rgba(0, 0, 0, 0.05);
-  }
-  .reader-app.dark .toc-link:hover {
-    background: rgba(255, 255, 255, 0.05);
   }
 </style>
