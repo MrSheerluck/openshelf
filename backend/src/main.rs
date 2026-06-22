@@ -1,5 +1,7 @@
 mod auth;
+mod books;
 mod db;
+mod storage;
 mod users;
 
 use axum::{http::Method, middleware, routing::get, Json, Router};
@@ -18,6 +20,7 @@ struct HealthResponse {
 pub struct AppState {
     pub db: Mutex<Connection>,
     pub jwt_secret: String,
+    pub storage: Option<storage::Storage>,
 }
 
 async fn health_check(state: axum::extract::State<Arc<AppState>>) -> Json<HealthResponse> {
@@ -42,9 +45,12 @@ async fn main() {
 
     db::run_migrations(&conn);
 
+    let s3_storage = storage::Storage::from_env();
+
     let state = Arc::new(AppState {
         db: Mutex::new(conn),
         jwt_secret,
+        storage: s3_storage,
     });
 
     let public = Router::new()
@@ -55,11 +61,12 @@ async fn main() {
     let protected = Router::new()
         .route("/auth/me", get(auth::me))
         .route("/auth/logout", axum::routing::post(auth::logout))
+        .route("/books", get(books::list_books).post(books::upload_book))
+        .route("/books/{id}", get(books::get_book).delete(books::delete_book))
+        .route("/books/{id}/file", get(books::serve_book_file))
         .route_layer(middleware::from_fn(auth::require_auth));
 
-    let api_routes = Router::new()
-        .merge(public)
-        .merge(protected);
+    let api_routes = Router::new().merge(public).merge(protected);
 
     let frontend_url =
         std::env::var("FRONTEND_URL").unwrap_or_else(|_| "http://localhost:3000".to_string());

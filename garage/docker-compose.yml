@@ -1,0 +1,31 @@
+services:
+  garage:
+    image: dxflrs/garage:v2.3
+    container_name: garage
+    ports:
+      - "127.0.0.1:3900:3900"
+    volumes:
+      - garage_meta:/var/lib/garage/meta
+      - garage_data:/var/lib/garage/data
+      - ./garage.toml:/etc/garage.toml:ro
+    command:
+      - /garage
+      - server
+      - --single-node
+    restart: unless-stopped
+    networks:
+      - default
+    healthcheck:
+      test: ["CMD", "/garage", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  default:
+    name: garage
+    driver: bridge
+
+volumes:
+  garage_meta:
+  garage_data:
