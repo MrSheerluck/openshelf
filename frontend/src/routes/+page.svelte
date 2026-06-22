@@ -161,14 +161,11 @@
 </svelte:head>
 
 <div class="app">
-  <aside class="sidebar">
+  <header class="topbar">
     <h1>OpenShelf</h1>
-    <nav>
-      <a href="/" class="active">Library</a>
-    </nav>
-    <div class="spacer"></div>
-    <button onclick={() => auth.logout()}>Sign out</button>
-  </aside>
+    <span class="topbar-spacer"></span>
+    <button class="signout-btn" onclick={() => auth.logout()}>Sign out</button>
+  </header>
 
   <main class="content">
     {#if !loaded}
@@ -277,54 +274,44 @@
 <style>
   .app {
     display: flex;
+    flex-direction: column;
     height: 100vh;
     font-family: system-ui, sans-serif;
   }
-  .sidebar {
-    width: 240px;
+  .topbar {
+    display: flex;
+    align-items: center;
+    padding: 0.75rem 1.5rem;
     background: #f9fafb;
-    border-right: 1px solid #e5e7eb;
-    display: flex;
-    flex-direction: column;
-    padding: 1.5rem 1rem;
+    border-bottom: 1px solid #e5e7eb;
+    flex-shrink: 0;
   }
-  .sidebar h1 {
-    font-size: 1.25rem;
-    margin: 0 0 2rem 0;
+  .topbar h1 {
+    font-size: 1.1rem;
+    margin: 0;
+    font-weight: 600;
   }
-  nav {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-  }
-  nav a {
-    text-decoration: none;
-    color: #111;
-    padding: 0.4rem 0.6rem;
-    border-radius: 6px;
-    font-size: 0.9rem;
-  }
-  nav a.active {
-    background: #e5e7eb;
-    font-weight: 500;
-  }
-  .spacer {
+  .topbar-spacer {
     flex: 1;
   }
-  .sidebar button {
+  .signout-btn {
     background: none;
     border: 1px solid #d1d5db;
     border-radius: 6px;
-    padding: 0.4rem;
+    padding: 0.35rem 0.75rem;
     cursor: pointer;
     font-size: 0.85rem;
     color: #555;
+  }
+  .signout-btn:hover {
+    background: #f5f5f5;
   }
   .content {
     flex: 1;
     display: flex;
     align-items: center;
     justify-content: center;
+    overflow-y: auto;
   }
   .status {
     color: #888;
@@ -370,7 +357,6 @@
     width: 100%;
     height: 100%;
     padding: 1.5rem;
-    overflow-y: auto;
   }
   .upload-btn {
     display: inline-block;
