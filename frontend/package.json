@@ -15,5 +15,9 @@
     "typescript": "^5.8.0",
     "vite": "^6.3.0"
   },
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "epubjs": "^0.3.93",
+    "pdfjs-dist": "^6.0.227"
+  }
 }

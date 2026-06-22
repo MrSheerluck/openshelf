@@ -39,7 +39,11 @@ pub async fn require_auth(
 ) -> Result<Response, StatusCode> {
     let path = request.uri().path();
 
-    if path == "/api/auth/signin" || path == "/api/auth/signup" || path == "/api/auth/status" {
+    if path == "/api/auth/signin"
+        || path == "/api/auth/signup"
+        || path == "/api/auth/status"
+        || path.starts_with("/api/books/") && path.ends_with("/cover")
+    {
         return Ok(next.run(request).await);
     }
 

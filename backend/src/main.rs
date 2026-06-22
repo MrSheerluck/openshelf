@@ -4,7 +4,7 @@ mod db;
 mod storage;
 mod users;
 
-use axum::{http::Method, middleware, routing::get, Json, Router};
+use axum::{extract::DefaultBodyLimit, http::Method, middleware, routing::get, Json, Router};
 use rusqlite::Connection;
 use serde::Serialize;
 use std::sync::Arc;
@@ -66,6 +66,8 @@ async fn main() {
         .route("/books", get(books::list_books).post(books::upload_book))
         .route("/books/{id}", get(books::get_book).delete(books::delete_book))
         .route("/books/{id}/file", get(books::serve_book_file))
+        .route("/books/{id}/cover", get(books::serve_book_cover))
+        .route("/books/{id}/progress", axum::routing::post(books::save_progress))
         .route_layer(middleware::from_fn(auth::require_auth));
 
     let api_routes = Router::new().merge(public).merge(protected);
@@ -82,6 +84,7 @@ async fn main() {
     let app = Router::new()
         .route("/health", get(health_check))
         .nest("/api", api_routes)
+        .layer(DefaultBodyLimit::max(100 * 1024 * 1024))
         .layer(cors)
         .with_state(state);
 
