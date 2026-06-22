@@ -3,6 +3,7 @@ import { themes as defaultThemes, fontFamilyCss } from "./themes";
 
 const WORDS_PER_MINUTE = 250;
 const STYLESHEET_KEY = "openshelf-reader";
+const PAGE_TURN_TIMEOUT = 2000;
 
 export interface EpubControllerOptions {
   fileUrl: string;
@@ -11,13 +12,14 @@ export interface EpubControllerOptions {
   initialCfi?: string;
 }
 
-function estimateReadingMinutes(sections: any[]): number {
-  let totalWords = 0;
-  for (const section of sections) {
-    const text = section.textContent ?? section.innerText ?? "";
-    totalWords += text.split(/\s+/).filter(Boolean).length;
-  }
-  return Math.max(1, Math.ceil(totalWords / WORDS_PER_MINUTE));
+function estimateReadingMinutes(locations: any, bookObj: any): number {
+  try {
+    const total = bookObj.locations.length();
+    if (total > 0) {
+      return Math.max(1, Math.ceil(total / 4));
+    }
+  } catch {}
+  return 0;
 }
 
 function buildReaderCss(themeName: ThemeName, typography: Typography): string {
@@ -238,7 +240,7 @@ export class EpubController {
           await this.bookObj.locations.generate(1024);
         }
         this.totalSections = this.bookObj.spine.length;
-        this.estimatedBookMinutes = estimateReadingMinutes(this.bookObj.spine.items ?? []);
+        this.estimatedBookMinutes = estimateReadingMinutes(this.bookObj.locations, this.bookObj);
       });
 
       this.rendition.on("relocated", (location: any) => {
@@ -247,6 +249,10 @@ export class EpubController {
         this.currentSectionIndex = location.start.index ?? 0;
         const cfi = location.start.cfi;
         if (cfi && this.onCfiChange) this.onCfiChange(cfi);
+        this.pageTurning = null;
+      });
+
+      this.rendition.on("rendered", () => {
         this.pageTurning = null;
       });
     } catch (e) {
@@ -270,17 +276,34 @@ export class EpubController {
   async next(): Promise<void> {
     if (!this.rendition || this.pageTurning) return;
     this.pageTurning = "forward";
-    await this.rendition.next();
+    const timeout = setTimeout(() => { this.pageTurning = null; }, PAGE_TURN_TIMEOUT);
+    try {
+      await this.rendition.next();
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   async prev(): Promise<void> {
     if (!this.rendition || this.pageTurning) return;
     this.pageTurning = "backward";
-    await this.rendition.prev();
+    const timeout = setTimeout(() => { this.pageTurning = null; }, PAGE_TURN_TIMEOUT);
+    try {
+      await this.rendition.prev();
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
-  display(href: string): void {
-    this.rendition?.display(href);
+  async display(href: string): Promise<void> {
+    if (!this.rendition || this.pageTurning) return;
+    this.pageTurning = "forward";
+    const timeout = setTimeout(() => { this.pageTurning = null; }, PAGE_TURN_TIMEOUT);
+    try {
+      await this.rendition.display(href);
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   destroy(): void {
