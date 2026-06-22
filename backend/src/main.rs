@@ -37,6 +37,8 @@ async fn health_check(state: axum::extract::State<Arc<AppState>>) -> Json<Health
 
 #[tokio::main]
 async fn main() {
+    dotenvy::dotenv().ok();
+
     let jwt_secret =
         std::env::var("JWT_SECRET").unwrap_or_else(|_| "dev-secret-change-me".to_string());
 

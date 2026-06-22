@@ -31,14 +31,17 @@ pub struct Book {
     pub updated_at: String,
 }
 
-fn storage(state: &AppState) -> Result<&Storage, StatusCode> {
-    state.storage.as_ref().ok_or(StatusCode::SERVICE_UNAVAILABLE)
+fn storage(state: &AppState) -> Result<&Storage, (StatusCode, Json<serde_json::Value>)> {
+    state.storage.as_ref().ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        Json(serde_json::json!({"error": "Storage not configured"})),
+    ))
 }
 
 pub async fn upload_book(
     State(state): State<Arc<AppState>>,
     mut multipart: Multipart,
-) -> Result<(StatusCode, Json<serde_json::Value>), StatusCode> {
+) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
     let storage = storage(&state)?;
 
     let mut file_bytes: Option<Vec<u8>> = None;
@@ -47,7 +50,7 @@ pub async fn upload_book(
     let mut title = String::new();
     let mut author: Option<String> = None;
 
-    while let Some(field) = multipart.next_field().await.map_err(|_| StatusCode::BAD_REQUEST)? {
+    while let Some(field) = multipart.next_field().await.unwrap_or(None) {
         let name = field.name().unwrap_or("").to_string();
         match name.as_str() {
             "file" => {
@@ -60,24 +63,33 @@ pub async fn upload_book(
                     field
                         .bytes()
                         .await
-                        .map_err(|_| StatusCode::BAD_REQUEST)?
+                        .unwrap_or_default()
                         .to_vec(),
                 );
             }
             "title" => {
-                title = field.text().await.map_err(|_| StatusCode::BAD_REQUEST)?;
+                title = field.text().await.unwrap_or_default();
             }
             "author" => {
-                author = Some(field.text().await.map_err(|_| StatusCode::BAD_REQUEST)?);
+                let text = field.text().await.unwrap_or_default();
+                if !text.is_empty() {
+                    author = Some(text);
+                }
             }
             _ => {}
         }
     }
 
-    let bytes = file_bytes.ok_or(StatusCode::BAD_REQUEST)?;
+    let bytes = file_bytes.ok_or((
+        StatusCode::BAD_REQUEST,
+        Json(serde_json::json!({"error": "No file provided"})),
+    ))?;
 
     if bytes.is_empty() {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "File is empty"})),
+        ));
     }
 
     let id = Uuid::new_v4().to_string();
@@ -106,14 +118,14 @@ pub async fn upload_book(
     storage
         .put(&file_path, bytes, &content_type)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "S3 upload failed"}))))?;
 
     let db = state.db.lock().await;
     db.execute(
         "INSERT INTO books (id, title, author, file_path, format, file_size) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
         params![id, title, author, file_path, format, file_size],
     )
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "Database error"}))))?;
 
     Ok((
         StatusCode::CREATED,
@@ -202,7 +214,7 @@ pub async fn serve_book_file(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
 ) -> Result<Response, StatusCode> {
-    let storage = storage(&state)?;
+    let storage = storage(&state).map_err(|e| e.0)?;
 
     let db = state.db.lock().await;
     let (file_path, format): (String, String) = db
