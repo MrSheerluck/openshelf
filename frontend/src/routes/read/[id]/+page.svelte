@@ -23,6 +23,7 @@
   let viewerEl = $state<HTMLDivElement | null>(null);
   let rendition: any = null;
   let bookObj: any = null;
+  let fileBlobUrl = $state<string | null>(null);
   let theme = $state<Theme>("light");
   let fontSize = $state(100);
   let showControls = $state(true);
@@ -36,6 +37,19 @@
 
   function fileUrl(): string {
     return `${API_URL}/api/books/${id}/file`;
+  }
+
+  async function prefetchFileBlob(): Promise<string | null> {
+    try {
+      const res = await fetch(fileUrl(), { credentials: "include" });
+      if (!res.ok) return null;
+      const blob = await res.blob();
+      if (fileBlobUrl) URL.revokeObjectURL(fileBlobUrl);
+      fileBlobUrl = URL.createObjectURL(blob);
+      return fileBlobUrl;
+    } catch {
+      return null;
+    }
   }
 
   function getStoredSettings() {
@@ -163,23 +177,37 @@
   });
 
   $effect(() => {
-    if (book && viewerEl) {
-      if (book.format === "epub") {
+    if (!book) return;
+    if (book.format === "epub") {
+      if (viewerEl) {
         renderEpub();
-      } else {
-        loading = false;
       }
-      return () => {
-        if (rendition) {
-          rendition.destroy();
-          rendition = null;
+    } else if (book.format === "pdf") {
+      prefetchFileBlob().then((url) => {
+        if (url) {
+          loading = false;
+        } else {
+          error = "Failed to load PDF";
+          loading = false;
         }
-        if (bookObj) {
-          bookObj.destroy();
-          bookObj = null;
-        }
-      };
+      });
+    } else {
+      loading = false;
     }
+    return () => {
+      if (rendition) {
+        rendition.destroy();
+        rendition = null;
+      }
+      if (bookObj) {
+        bookObj.destroy();
+        bookObj = null;
+      }
+      if (fileBlobUrl) {
+        URL.revokeObjectURL(fileBlobUrl);
+        fileBlobUrl = null;
+      }
+    };
   });
 
   function setTheme(t: Theme) {
@@ -222,9 +250,11 @@
     goto("/");
   }
 
-  function downloadFile() {
+  async function downloadFile() {
+    const url = await prefetchFileBlob();
+    if (!url) return;
     const a = document.createElement("a");
-    a.href = fileUrl();
+    a.href = url;
     a.download = book?.title ?? "book";
     a.click();
   }
@@ -266,7 +296,11 @@
     {:else if error}
       <p class="reader-status error">{error}</p>
     {:else if book?.format === "pdf"}
-      <iframe src={fileUrl()} title="PDF viewer" class="pdf-viewer"></iframe>
+      {#if fileBlobUrl}
+        <iframe src={fileBlobUrl} title="PDF viewer" class="pdf-viewer"></iframe>
+      {:else}
+        <p class="reader-status">Loading PDF...</p>
+      {/if}
     {:else if book?.format === "mobi"}
       <div class="unsupported-format">
         <p>MOBI files cannot be displayed in the browser.</p>

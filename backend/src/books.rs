@@ -226,6 +226,7 @@ pub async fn upload_book(
     let mut content_type = String::new();
     let mut title = String::new();
     let mut author: Option<String> = None;
+    let mut cover_upload: Option<(Vec<u8>, String)> = None;
 
     while let Some(field) = multipart.next_field().await.unwrap_or(None) {
         let name = field.name().unwrap_or("").to_string();
@@ -246,6 +247,22 @@ pub async fn upload_book(
                     Err(e) => {
                         eprintln!("[upload] error reading file bytes: {e}");
                         file_bytes = Some(Vec::new());
+                    }
+                }
+            }
+            "cover" => {
+                let ct = field
+                    .content_type()
+                    .unwrap_or("image/jpeg")
+                    .to_string();
+                match field.bytes().await {
+                    Ok(data) => {
+                        let len = data.len();
+                        eprintln!("[upload] received cover image: {len} bytes, type={ct}");
+                        cover_upload = Some((data.to_vec(), ct));
+                    }
+                    Err(e) => {
+                        eprintln!("[upload] error reading cover bytes: {e}");
                     }
                 }
             }
@@ -326,9 +343,19 @@ pub async fn upload_book(
         })?;
     eprintln!("[upload] file uploaded successfully");
 
-    let cover_path = if let Some((cover_data, cover_mime)) = cover_result {
+    let cover_path = if let Some((cover_data, cover_mime)) = cover_upload {
         let cover_key = format!("books/{}/cover.jpg", id);
-        eprintln!("[upload] uploading cover to S3: {cover_key}");
+        eprintln!("[upload] uploading provided cover to S3: {cover_key}");
+        if storage.put(&cover_key, cover_data, &cover_mime).await.is_ok() {
+            eprintln!("[upload] cover uploaded successfully");
+            Some(cover_key)
+        } else {
+            eprintln!("[upload] cover upload failed (non-fatal)");
+            None
+        }
+    } else if let Some((cover_data, cover_mime)) = cover_result {
+        let cover_key = format!("books/{}/cover.jpg", id);
+        eprintln!("[upload] uploading extracted cover to S3: {cover_key}");
         if storage.put(&cover_key, cover_data, &cover_mime).await.is_ok() {
             eprintln!("[upload] cover uploaded successfully");
             Some(cover_key)

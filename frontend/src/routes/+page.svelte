@@ -2,6 +2,7 @@
   import * as auth from "$lib/auth.svelte.ts";
   import { api, uploadFile as apiUpload, extractErrorMessage } from "$lib/api";
   import { goto } from "$app/navigation";
+  import { extractPdfCover } from "$lib/pdf";
 
   interface Book {
     id: string;
@@ -18,6 +19,7 @@
   let books = $state<Book[]>([]);
   let uploading = $state(false);
   let uploadProgress = $state(0);
+  let uploadStatus = $state("");
   let dragOver = $state(false);
   let error = $state("");
   let loaded = $state(false);
@@ -36,6 +38,14 @@
   function isValidFile(file: File): boolean {
     const lower = file.name.toLowerCase();
     return ALLOWED_EXTENSIONS.some((ext) => lower.endsWith(ext));
+  }
+
+  function detectFormat(file: File): string {
+    const lower = file.name.toLowerCase();
+    if (lower.endsWith(".epub")) return "epub";
+    if (lower.endsWith(".pdf")) return "pdf";
+    if (lower.endsWith(".mobi")) return "mobi";
+    return "epub";
   }
 
   async function loadBooks() {
@@ -66,11 +76,22 @@
 
     uploading = true;
     uploadProgress = 0;
+    uploadStatus = "Preparing...";
     error = "";
     try {
       const form = new FormData();
       form.append("file", file);
 
+      const format = detectFormat(file);
+      if (format === "pdf") {
+        uploadStatus = "Rendering cover...";
+        const coverBlob = await extractPdfCover(file);
+        if (coverBlob) {
+          form.append("cover", coverBlob, "cover.jpg");
+        }
+      }
+
+      uploadStatus = "Uploading...";
       const res = await apiUpload("/api/books", form, (loaded, total) => {
         uploadProgress = Math.round((loaded / total) * 100);
       });
@@ -85,6 +106,7 @@
     } finally {
       uploading = false;
       uploadProgress = 0;
+      uploadStatus = "";
     }
   }
 
@@ -167,7 +189,7 @@
               <div class="upload-progress-bar">
                 <div class="upload-progress-fill" style="width: {uploadProgress}%"></div>
               </div>
-              <span class="upload-progress-text">Uploading... {uploadProgress}%</span>
+              <span class="upload-progress-text">{uploadStatus} {uploadProgress}%</span>
             </div>
           {:else}
             <span>Choose file or drag here</span>
@@ -187,7 +209,7 @@
               onchange={handleFileInput}
               disabled={uploading}
             />
-            {uploading ? `Uploading... ${uploadProgress}%` : "+ Add book"}
+            {uploading ? `${uploadStatus} ${uploadProgress}%` : "+ Add book"}
           </label>
           {#if uploading}
             <div class="upload-progress upload-progress-inline">
@@ -425,18 +447,18 @@
   .book-card-link {
     all: unset;
     display: block;
+    width: 100%;
     cursor: pointer;
     border-radius: 8px;
     overflow: hidden;
   }
   .book-cover {
-    aspect-ratio: 2/3;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    position: relative;
+    width: 100%;
+    padding-bottom: 150%;
     border-radius: 6px;
     overflow: hidden;
-    position: relative;
+    background: #e5e7eb;
   }
   .book-cover.epub {
     background: linear-gradient(135deg, #e0c3fc, #8ec5fc);
@@ -448,11 +470,19 @@
     background: linear-gradient(135deg, #c3fce0, #8efcb0);
   }
   .cover-img {
+    position: absolute;
+    top: 0;
+    left: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
+    display: block;
   }
   .cover-format {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
     font-size: 0.75rem;
     font-weight: 600;
     color: rgba(255, 255, 255, 0.8);
