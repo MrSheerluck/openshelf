@@ -68,6 +68,19 @@ async fn main() {
         .route("/books/{id}/file", get(books::serve_book_file))
         .route("/books/{id}/cover", get(books::serve_book_cover))
         .route("/books/{id}/progress", axum::routing::post(books::save_progress))
+        .route(
+            "/books/{id}/annotations",
+            get(books::list_annotations).post(books::create_annotation),
+        )
+        .route(
+            "/books/{id}/annotations/{ann_id}",
+            axum::routing::put(books::update_annotation)
+                .delete(books::delete_annotation),
+        )
+        .route(
+            "/books/{id}/settings",
+            get(books::get_settings).put(books::save_settings),
+        )
         .route_layer(middleware::from_fn(auth::require_auth));
 
     let api_routes = Router::new().merge(public).merge(protected);

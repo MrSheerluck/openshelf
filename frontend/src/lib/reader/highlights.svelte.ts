@@ -1,41 +1,65 @@
 import type { Highlight, HighlightColor } from "./types";
+import { api } from "$lib/api";
 
 const STORAGE_PREFIX = "openshelf:highlights:";
 
 export class HighlightsStore {
   bookId: string;
   highlights = $state<Highlight[]>([]);
+  private loaded = false;
 
   constructor(bookId: string) {
     this.bookId = bookId;
   }
 
-  load(): void {
+  async load(): Promise<void> {
+    if (this.loaded) return;
+    this.loaded = true;
+    try {
+      const res = await api(`/api/books/${this.bookId}/annotations`);
+      if (res.ok) {
+        const data = await res.json();
+        this.highlights = data.map((a: any) => ({
+          id: a.id,
+          cfiRange: a.cfi,
+          text: a.text,
+          color: a.color as HighlightColor,
+          note: a.note,
+          createdAt: new Date(a.created_at).getTime(),
+        }));
+        this.saveLocal();
+        return;
+      }
+    } catch {}
+    this.loadLocal();
+  }
+
+  private loadLocal(): void {
     try {
       const stored = localStorage.getItem(this.key());
-      if (stored) {
-        this.highlights = JSON.parse(stored);
-      }
+      if (stored) this.highlights = JSON.parse(stored);
     } catch {}
   }
 
-  save(): void {
+  private saveLocal(): void {
     try {
       localStorage.setItem(this.key(), JSON.stringify(this.highlights));
     } catch {}
   }
 
-  add(cfiRange: string, text: string, color: HighlightColor, note: string | null = null): Highlight {
+  async add(cfiRange: string, text: string, color: HighlightColor, note: string | null = null): Promise<Highlight> {
     const existing = this.highlights.find((h) => h.cfiRange === cfiRange);
     if (existing) {
       existing.color = color;
       existing.text = text;
       existing.note = note;
-      this.save();
+      this.saveLocal();
+      this.syncUpdate(existing);
       return existing;
     }
+    const tempId = crypto.randomUUID();
     const h: Highlight = {
-      id: crypto.randomUUID(),
+      id: tempId,
       cfiRange,
       text,
       color,
@@ -43,30 +67,70 @@ export class HighlightsStore {
       createdAt: Date.now(),
     };
     this.highlights.push(h);
-    this.save();
+    this.saveLocal();
+    this.syncCreate(h);
     return h;
   }
 
-  remove(id: string): void {
+  async remove(id: string): Promise<void> {
     this.highlights = this.highlights.filter((h) => h.id !== id);
-    this.save();
+    this.saveLocal();
+    try {
+      await api(`/api/books/${this.bookId}/annotations/${id}`, { method: "DELETE" });
+    } catch {}
   }
 
-  removeByCfi(cfiRange: string): void {
-    this.highlights = this.highlights.filter((h) => h.cfiRange !== cfiRange);
-    this.save();
+  async removeByCfi(cfiRange: string): Promise<void> {
+    const h = this.highlights.find((x) => x.cfiRange === cfiRange);
+    if (h) await this.remove(h.id);
   }
 
-  updateNote(id: string, note: string | null): void {
+  async updateNote(id: string, note: string | null): Promise<void> {
     const h = this.highlights.find((x) => x.id === id);
-    if (h) {
-      h.note = note;
-      this.save();
-    }
+    if (!h) return;
+    h.note = note;
+    this.saveLocal();
+    try {
+      await api(`/api/books/${this.bookId}/annotations/${id}`, {
+        method: "PUT",
+        body: JSON.stringify({ note, color: h.color }),
+      });
+    } catch {}
   }
 
   findByCfi(cfiRange: string): Highlight | undefined {
     return this.highlights.find((h) => h.cfiRange === cfiRange);
+  }
+
+  private async syncCreate(h: Highlight): Promise<void> {
+    try {
+      const res = await api(`/api/books/${this.bookId}/annotations`, {
+        method: "POST",
+        body: JSON.stringify({
+          cfi: h.cfiRange,
+          text: h.text,
+          note: h.note,
+          color: h.color,
+        }),
+      });
+      if (res.ok) {
+        const created = await res.json();
+        const idx = this.highlights.findIndex((x) => x.id === h.id);
+        if (idx >= 0) {
+          this.highlights[idx].id = created.id;
+          this.saveLocal();
+        }
+      }
+    } catch {}
+  }
+
+  private async syncUpdate(h: Highlight): Promise<void> {
+    try {
+      await api(`/api/books/${this.bookId}/annotations/${h.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ note: h.note, color: h.color }),
+      });
+    } catch {}
   }
 
   private key(): string {

@@ -561,6 +561,165 @@ pub async fn save_progress(
     Ok(StatusCode::NO_CONTENT)
 }
 
+// ---- Annotations (highlights + notes) ----
+
+#[derive(Serialize, Deserialize)]
+pub struct Annotation {
+    pub id: String,
+    pub cfi: String,
+    pub text: String,
+    pub note: Option<String>,
+    pub color: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Deserialize)]
+pub struct CreateAnnotation {
+    pub cfi: String,
+    pub text: String,
+    pub note: Option<String>,
+    pub color: String,
+}
+
+#[derive(Deserialize)]
+pub struct UpdateAnnotation {
+    pub note: Option<String>,
+    pub color: Option<String>,
+}
+
+pub async fn list_annotations(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<Json<Vec<Annotation>>, StatusCode> {
+    let db = state.db.lock().await;
+    let mut stmt = db
+        .prepare(
+            "SELECT id, cfi, text, note, color, created_at, updated_at FROM annotations WHERE book_id = ?1 ORDER BY created_at ASC",
+        )
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let rows = stmt
+        .query_map(params![id], |row| {
+            Ok(Annotation {
+                id: row.get(0)?,
+                cfi: row.get(1)?,
+                text: row.get(2)?,
+                note: row.get(3)?,
+                color: row.get(4)?,
+                created_at: row.get(5)?,
+                updated_at: row.get(6)?,
+            })
+        })
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let annotations: Vec<Annotation> = rows.filter_map(|r| r.ok()).collect();
+    Ok(Json(annotations))
+}
+
+pub async fn create_annotation(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Json(body): Json<CreateAnnotation>,
+) -> Result<Json<Annotation>, StatusCode> {
+    let db = state.db.lock().await;
+    let ann_id = Uuid::new_v4().to_string();
+    db.execute(
+        "INSERT INTO annotations (id, book_id, chapter_index, cfi, text, note, color) VALUES (?1, ?2, 0, ?3, ?4, ?5, ?6)",
+        params![ann_id, id, body.cfi, body.text, body.note, body.color],
+    )
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let row = db
+        .query_row(
+            "SELECT id, cfi, text, note, color, created_at, updated_at FROM annotations WHERE id = ?1",
+            params![ann_id],
+            |row| {
+                Ok(Annotation {
+                    id: row.get(0)?,
+                    cfi: row.get(1)?,
+                    text: row.get(2)?,
+                    note: row.get(3)?,
+                    color: row.get(4)?,
+                    created_at: row.get(5)?,
+                    updated_at: row.get(6)?,
+                })
+            },
+        )
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(row))
+}
+
+pub async fn update_annotation(
+    State(state): State<Arc<AppState>>,
+    Path((id, ann_id)): Path<(String, String)>,
+    Json(body): Json<UpdateAnnotation>,
+) -> Result<StatusCode, StatusCode> {
+    let db = state.db.lock().await;
+    db.execute(
+        "UPDATE annotations SET note = COALESCE(?1, note), color = COALESCE(?2, color), updated_at = datetime('now') WHERE id = ?3 AND book_id = ?4",
+        params![body.note, body.color, ann_id, id],
+    )
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn delete_annotation(
+    State(state): State<Arc<AppState>>,
+    Path((id, ann_id)): Path<(String, String)>,
+) -> Result<StatusCode, StatusCode> {
+    let db = state.db.lock().await;
+    db.execute(
+        "DELETE FROM annotations WHERE id = ?1 AND book_id = ?2",
+        params![ann_id, id],
+    )
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+// ---- Reader settings sync ----
+
+#[derive(Serialize, Deserialize)]
+pub struct ReaderSettingsPayload {
+    pub theme: String,
+    pub font_family: String,
+    pub font_size: i64,
+}
+
+pub async fn get_settings(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<Json<Option<ReaderSettingsPayload>>, StatusCode> {
+    let db = state.db.lock().await;
+    let result: Result<Option<String>, _> = db.query_row(
+        "SELECT value FROM preferences WHERE key = ?1",
+        params![format!("reader_settings:{}", id)],
+        |row| row.get(0),
+    );
+    match result {
+        Ok(Some(json_str)) => {
+            let payload: ReaderSettingsPayload =
+                serde_json::from_str(&json_str).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            Ok(Json(Some(payload)))
+        }
+        Ok(None) => Ok(Json(None)),
+        Err(_) => Ok(Json(None)),
+    }
+}
+
+pub async fn save_settings(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Json(body): Json<ReaderSettingsPayload>,
+) -> Result<StatusCode, StatusCode> {
+    let db = state.db.lock().await;
+    let json_str = serde_json::to_string(&body).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    db.execute(
+        "INSERT INTO preferences (key, value) VALUES (?1, ?2) ON CONFLICT(key) DO UPDATE SET value = ?2",
+        params![format!("reader_settings:{}", id), json_str],
+    )
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 pub async fn delete_book(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,

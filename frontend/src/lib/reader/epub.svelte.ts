@@ -427,58 +427,44 @@ export class EpubController {
         } catch {}
       });
 
-      let downX = 0, downY = 0, downTime = 0;
-      this.rendition.on("mousedown", (e: any, contents: any) => {
-        const x = e.clientX ?? (e.touches?.[0]?.clientX);
-        const y = e.clientY ?? (e.touches?.[0]?.clientY);
-        downX = x ?? 0;
-        downY = y ?? 0;
-        downTime = Date.now();
+      const SWIPE_THRESHOLD = 50;
+      let downX = 0, downY = 0, isDown = false;
+
+      this.rendition.on("mousedown", (e: any) => {
+        downX = e.clientX ?? 0;
+        downY = e.clientY ?? 0;
+        isDown = true;
       });
 
-      this.rendition.on("mouseup", (e: any, contents: any) => {
-        if (!contents) return;
-        try {
-          const sel = contents.window.getSelection();
-          if (sel && sel.toString().trim().length > 0) return;
-        } catch {}
-        const x = e.clientX ?? (e.changedTouches?.[0]?.clientX);
-        const y = e.clientY ?? (e.changedTouches?.[0]?.clientY);
-        if (x === undefined) return;
-        const dx = Math.abs(x - downX);
-        const dy = Math.abs(y - downY);
-        const elapsed = Date.now() - downTime;
-        if (dx > 8 || dy > 8 || elapsed > 400) return;
-        const w = contents.window?.innerWidth ?? window.innerWidth;
-        if (x / w < 0.3) this.prev();
-        else this.next();
+      this.rendition.on("mouseup", (e: any) => {
+        if (!isDown) return;
+        isDown = false;
+        const dx = (e.clientX ?? 0) - downX;
+        const dy = (e.clientY ?? 0) - downY;
+        if (Math.abs(dx) > SWIPE_THRESHOLD && Math.abs(dx) > Math.abs(dy) * 2) {
+          if (dx < 0) this.next();
+          else this.prev();
+        }
       });
 
-      this.rendition.on("touchstart", (e: any, contents: any) => {
-        if (!contents) return;
-        const x = e.touches?.[0]?.clientX;
-        const y = e.touches?.[0]?.clientY;
-        downX = x ?? 0;
-        downY = y ?? 0;
-        downTime = Date.now();
+      this.rendition.on("touchstart", (e: any) => {
+        const t = e.touches?.[0];
+        downX = t?.clientX ?? 0;
+        downY = t?.clientY ?? 0;
+        isDown = true;
       }, { passive: true });
 
-      this.rendition.on("touchend", (e: any, contents: any) => {
-        if (!contents) return;
-        try {
-          const sel = contents.window.getSelection();
-          if (sel && sel.toString().trim().length > 0) return;
-        } catch {}
-        const x = e.changedTouches?.[0]?.clientX;
-        const y = e.changedTouches?.[0]?.clientY;
-        if (x === undefined) return;
-        const dx = Math.abs(x - downX);
-        const dy = Math.abs(y - downY);
-        const elapsed = Date.now() - downTime;
-        if (dx > 8 || dy > 8 || elapsed > 400) return;
-        const w = contents.window?.innerWidth ?? window.innerWidth;
-        if (x / w < 0.3) this.prev();
-        else this.next();
+      this.rendition.on("touchend", (e: any) => {
+        if (!isDown) return;
+        isDown = false;
+        const t = e.changedTouches?.[0];
+        if (!t) return;
+        const dx = t.clientX - downX;
+        const dy = t.clientY - downY;
+        if (Math.abs(dx) > SWIPE_THRESHOLD && Math.abs(dx) > Math.abs(dy) * 2) {
+          if (dx < 0) this.next();
+          else this.prev();
+        }
       }, { passive: true });
     } catch (e) {
       console.error("EPUB render error:", e);

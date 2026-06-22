@@ -113,16 +113,16 @@
     };
   });
 
-  function handleViewerMount(el: HTMLDivElement) {
+  async function handleViewerMount(el: HTMLDivElement) {
     if (!book || book.format !== "epub" || controller) return;
     if (!settings) {
       settings = new ReaderSettingsStore(id);
     }
     if (!highlightsStore) {
       highlightsStore = new HighlightsStore(id);
-      highlightsStore.load();
     }
-    const stored = settings.load();
+    const stored = await settings.load();
+    await highlightsStore.load();
     const c = new EpubController({
       fileUrl: fileUrl(),
       typography: settings.typography,
@@ -140,11 +140,11 @@
       if (!highlightsStore) return;
       const h = highlightsStore.findByCfi(cfiRange);
       if (h) {
-        const range = c.rendition?.annotations._annotations[encodeURI(cfiRange + "highlight")]?.mark;
         let x = window.innerWidth / 2, y = window.innerHeight / 2;
         try {
-          if (range && range.getBoundingClientRect) {
-            const r = range.getBoundingClientRect();
+          const ann = c.rendition?.annotations?._annotations?.[encodeURI(cfiRange + "highlight")];
+          if (ann?.mark?.element) {
+            const r = ann.mark.element.getBoundingClientRect();
             x = r.left + r.width / 2;
             y = r.top;
           }
