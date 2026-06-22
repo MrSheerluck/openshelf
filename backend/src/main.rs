@@ -67,11 +67,20 @@ async fn main() {
         .route("/auth/me", get(auth::me))
         .route("/auth/logout", axum::routing::post(auth::logout))
         .route("/books", get(books::list_books).post(books::upload_book))
-        .route("/books/{id}", get(books::get_book).delete(books::delete_book))
+        .route(
+            "/books/{id}",
+            get(books::get_book).delete(books::delete_book),
+        )
         .route("/books/{id}/file", get(books::serve_book_file))
         .route("/books/{id}/cover", get(books::serve_book_cover))
-        .route("/books/{id}/resource/{*path}", get(books::serve_book_resource))
-        .route("/books/{id}/progress", axum::routing::post(books::save_progress))
+        .route(
+            "/books/{id}/resource/{*path}",
+            get(books::serve_book_resource),
+        )
+        .route(
+            "/books/{id}/progress",
+            axum::routing::post(books::save_progress),
+        )
         .route(
             "/books/{id}/annotations",
             get(books::list_annotations).post(books::create_annotation),
@@ -86,10 +95,12 @@ async fn main() {
         )
         .route(
             "/books/{id}/annotations/{ann_id}",
-            axum::routing::put(books::update_annotation)
-                .delete(books::delete_annotation),
+            axum::routing::put(books::update_annotation).delete(books::delete_annotation),
         )
-        .route("/books/{id}/annotations/export", get(books::export_annotations))
+        .route(
+            "/books/{id}/annotations/export",
+            get(books::export_annotations),
+        )
         .route(
             "/books/{id}/settings",
             get(books::get_settings).put(books::save_settings),

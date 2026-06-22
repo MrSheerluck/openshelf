@@ -14,11 +14,9 @@ impl Storage {
         let secret_key = std::env::var("S3_SECRET_KEY").ok()?;
 
         let client = if let Ok(account_id) = std::env::var("R2_ACCOUNT_ID") {
-            let preset = s3::providers::cloudflare_r2(
-                &account_id,
-                s3::providers::R2Endpoint::Global,
-            )
-            .ok()?;
+            let preset =
+                s3::providers::cloudflare_r2(&account_id, s3::providers::R2Endpoint::Global)
+                    .ok()?;
             Client::builder(preset.endpoint())
                 .ok()?
                 .region(preset.region())

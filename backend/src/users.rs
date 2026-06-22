@@ -66,9 +66,7 @@ fn create_auth_cookie(secret: &str) -> Result<Cookie<'static>, StatusCode> {
         .build())
 }
 
-pub async fn status(
-    State(state): State<Arc<AppState>>,
-) -> Json<serde_json::Value> {
+pub async fn status(State(state): State<Arc<AppState>>) -> Json<serde_json::Value> {
     let count = state.db.lock().await;
     let count = user_count(&count);
     Json(json!({ "has_users": count > 0 }))

@@ -287,7 +287,7 @@
   function jumpBookmark(direction: 1 | -1) {
     if (!controller?.currentCfi || !bookmarksStore || bookmarksStore.bookmarks.length === 0) return;
     const sorted = [...bookmarksStore.bookmarks].sort((a, b) => a.chapterIndex - b.chapterIndex || a.createdAt - b.createdAt);
-    const currentIndex = sorted.findIndex((bookmark) => bookmark.cfi === controller.currentCfi);
+    const currentIndex = sorted.findIndex((bookmark) => bookmark.cfi === controller?.currentCfi);
     const anchorIndex = currentIndex >= 0 ? currentIndex : (direction > 0 ? -1 : 0);
     const nextIndex = direction > 0
       ? (anchorIndex + 1) % sorted.length

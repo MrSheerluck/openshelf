@@ -242,7 +242,9 @@ pub async fn upload_book(
                     Ok(data) => {
                         let len = data.len();
                         file_bytes = Some(data.to_vec());
-                        eprintln!("[upload] received file: {filename} ({len} bytes, type={content_type})");
+                        eprintln!(
+                            "[upload] received file: {filename} ({len} bytes, type={content_type})"
+                        );
                     }
                     Err(e) => {
                         eprintln!("[upload] error reading file bytes: {e}");
@@ -251,10 +253,7 @@ pub async fn upload_book(
                 }
             }
             "cover" => {
-                let ct = field
-                    .content_type()
-                    .unwrap_or("image/jpeg")
-                    .to_string();
+                let ct = field.content_type().unwrap_or("image/jpeg").to_string();
                 match field.bytes().await {
                     Ok(data) => {
                         let len = data.len();
@@ -339,14 +338,21 @@ pub async fn upload_book(
         .await
         .map_err(|e| {
             eprintln!("[upload] ERROR: S3 upload failed: {e}");
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "S3 upload failed"})))
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "S3 upload failed"})),
+            )
         })?;
     eprintln!("[upload] file uploaded successfully");
 
     let cover_path = if let Some((cover_data, cover_mime)) = cover_upload {
         let cover_key = format!("books/{}/cover.jpg", id);
         eprintln!("[upload] uploading provided cover to S3: {cover_key}");
-        if storage.put(&cover_key, cover_data, &cover_mime).await.is_ok() {
+        if storage
+            .put(&cover_key, cover_data, &cover_mime)
+            .await
+            .is_ok()
+        {
             eprintln!("[upload] cover uploaded successfully");
             Some(cover_key)
         } else {
@@ -356,7 +362,11 @@ pub async fn upload_book(
     } else if let Some((cover_data, cover_mime)) = cover_result {
         let cover_key = format!("books/{}/cover.jpg", id);
         eprintln!("[upload] uploading extracted cover to S3: {cover_key}");
-        if storage.put(&cover_key, cover_data, &cover_mime).await.is_ok() {
+        if storage
+            .put(&cover_key, cover_data, &cover_mime)
+            .await
+            .is_ok()
+        {
             eprintln!("[upload] cover uploaded successfully");
             Some(cover_key)
         } else {
@@ -379,15 +389,10 @@ pub async fn upload_book(
     })?;
     eprintln!("[upload] book {id} inserted successfully");
 
-    Ok((
-        StatusCode::CREATED,
-        Json(serde_json::json!({ "id": id })),
-    ))
+    Ok((StatusCode::CREATED, Json(serde_json::json!({ "id": id }))))
 }
 
-pub async fn list_books(
-    State(state): State<Arc<AppState>>,
-) -> Result<Json<Vec<Book>>, StatusCode> {
+pub async fn list_books(State(state): State<Arc<AppState>>) -> Result<Json<Vec<Book>>, StatusCode> {
     let db = state.db.lock().await;
 
     let mut stmt = match db.prepare(
@@ -592,7 +597,8 @@ pub async fn serve_book_resource(
     };
 
     let cursor = Cursor::new(zip_bytes.as_ref());
-    let mut archive = zip::ZipArchive::new(cursor).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let mut archive =
+        zip::ZipArchive::new(cursor).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Try an exact-name match first, then fall back to a case-insensitive
     // lookup because some authoring tools emit inconsistent case between the
@@ -790,7 +796,11 @@ pub async fn export_annotations(
     let db = state.db.lock().await;
 
     let book_title: String = db
-        .query_row("SELECT title FROM books WHERE id = ?1", params![id], |row| row.get(0))
+        .query_row(
+            "SELECT title FROM books WHERE id = ?1",
+            params![id],
+            |row| row.get(0),
+        )
         .map_err(|_| StatusCode::NOT_FOUND)?;
 
     let annotations: Vec<Annotation> = {
@@ -825,7 +835,10 @@ pub async fn export_annotations(
                     md.push_str(&format!("**Note:** {}\n\n", note));
                 }
             }
-            md.push_str(&format!("*Color: {} · Created: {}*\n\n---\n\n", a.color, a.created_at));
+            md.push_str(&format!(
+                "*Color: {} · Created: {}*\n\n---\n\n",
+                a.color, a.created_at
+            ));
         }
         if annotations.is_empty() {
             md.push_str("No highlights yet.\n");
@@ -834,7 +847,10 @@ pub async fn export_annotations(
             .header(header::CONTENT_TYPE, "text/markdown; charset=utf-8")
             .header(
                 header::CONTENT_DISPOSITION,
-                format!("attachment; filename=\"{}-highlights.md\"", sanitize_filename(&book_title)),
+                format!(
+                    "attachment; filename=\"{}-highlights.md\"",
+                    sanitize_filename(&book_title)
+                ),
             )
             .body(md.into())
             .unwrap())
@@ -855,12 +871,16 @@ pub async fn export_annotations(
                 "created_at": a.created_at,
             })).collect::<Vec<_>>(),
         });
-        let body = serde_json::to_string_pretty(&json).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let body =
+            serde_json::to_string_pretty(&json).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         Ok(Response::builder()
             .header(header::CONTENT_TYPE, "application/json; charset=utf-8")
             .header(
                 header::CONTENT_DISPOSITION,
-                format!("attachment; filename=\"{}-highlights.json\"", sanitize_filename(&book_title)),
+                format!(
+                    "attachment; filename=\"{}-highlights.json\"",
+                    sanitize_filename(&book_title)
+                ),
             )
             .body(body.into())
             .unwrap())
@@ -874,7 +894,13 @@ pub struct ExportParams {
 
 fn sanitize_filename(name: &str) -> String {
     name.chars()
-        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect()
 }
 

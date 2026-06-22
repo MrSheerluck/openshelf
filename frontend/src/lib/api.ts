@@ -36,7 +36,7 @@ export function uploadFile(
 
     xhr.addEventListener("load", () => {
       const headers = parseHeaders(xhr.getAllResponseHeaders());
-      const body = new Blob([xhr.response ?? ""], { type: headers["content-type"] ?? "application/json" });
+      const body = new Blob([xhr.response ?? ""], { type: headers.get("content-type") ?? "application/json" });
       resolve(new Response(body, { status: xhr.status, statusText: xhr.statusText, headers }));
     });
 
