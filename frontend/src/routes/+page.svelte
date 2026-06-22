@@ -1,6 +1,6 @@
 <script lang="ts">
   import * as auth from "$lib/auth.svelte.ts";
-  import { api } from "$lib/api";
+  import { api, uploadFile as apiUpload, extractErrorMessage } from "$lib/api";
   import { goto } from "$app/navigation";
 
   interface Book {
@@ -13,8 +13,11 @@
     created_at: string;
   }
 
+  const ALLOWED_EXTENSIONS = [".epub", ".pdf", ".mobi"];
+
   let books = $state<Book[]>([]);
   let uploading = $state(false);
+  let uploadProgress = $state(0);
   let dragOver = $state(false);
   let error = $state("");
   let loaded = $state(false);
@@ -30,14 +33,22 @@
     return null;
   }
 
+  function isValidFile(file: File): boolean {
+    const lower = file.name.toLowerCase();
+    return ALLOWED_EXTENSIONS.some((ext) => lower.endsWith(ext));
+  }
+
   async function loadBooks() {
     try {
       const res = await api("/api/books");
       if (res.ok) {
         books = await res.json();
+        console.log("[library] loaded books:", books.length);
+      } else {
+        console.warn("[library] list failed:", res.status, res.statusText);
       }
-    } catch {
-      // ignore
+    } catch (e) {
+      console.error("[library] list error:", e);
     } finally {
       loaded = true;
     }
@@ -48,26 +59,32 @@
   });
 
   async function uploadFile(file: File) {
+    if (!isValidFile(file)) {
+      error = `Unsupported file type. Allowed: ${ALLOWED_EXTENSIONS.join(", ")}`;
+      return;
+    }
+
     uploading = true;
+    uploadProgress = 0;
     error = "";
     try {
       const form = new FormData();
       form.append("file", file);
 
-      const res = await api("/api/books", {
-        method: "POST",
-        body: form,
+      const res = await apiUpload("/api/books", form, (loaded, total) => {
+        uploadProgress = Math.round((loaded / total) * 100);
       });
 
       if (res.ok) {
         await loadBooks();
       } else {
-        error = "Upload failed";
+        error = await extractErrorMessage(res);
       }
-    } catch {
-      error = "Upload failed";
+    } catch (e) {
+      error = e instanceof Error ? e.message : "Upload failed";
     } finally {
       uploading = false;
+      uploadProgress = 0;
     }
   }
 
@@ -146,7 +163,12 @@
             disabled={uploading}
           />
           {#if uploading}
-            <span>Uploading...</span>
+            <div class="upload-progress">
+              <div class="upload-progress-bar">
+                <div class="upload-progress-fill" style="width: {uploadProgress}%"></div>
+              </div>
+              <span class="upload-progress-text">Uploading... {uploadProgress}%</span>
+            </div>
           {:else}
             <span>Choose file or drag here</span>
           {/if}
@@ -157,15 +179,24 @@
       </div>
     {:else}
       <div class="library">
-        <label class="upload-btn">
-          <input
-            type="file"
-            accept=".epub,.pdf,.mobi"
-            onchange={handleFileInput}
-            disabled={uploading}
-          />
-          {uploading ? "Uploading..." : "+ Add book"}
-        </label>
+        <div class="library-header">
+          <label class="upload-btn">
+            <input
+              type="file"
+              accept=".epub,.pdf,.mobi"
+              onchange={handleFileInput}
+              disabled={uploading}
+            />
+            {uploading ? `Uploading... ${uploadProgress}%` : "+ Add book"}
+          </label>
+          {#if uploading}
+            <div class="upload-progress upload-progress-inline">
+              <div class="upload-progress-bar">
+                <div class="upload-progress-fill" style="width: {uploadProgress}%"></div>
+              </div>
+            </div>
+          {/if}
+        </div>
         {#if error}
           <p class="error">{error}</p>
         {/if}
@@ -335,6 +366,46 @@
   }
   .upload-btn input {
     display: none;
+  }
+
+  .library-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .upload-progress {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    color: #666;
+    font-size: 0.9rem;
+    min-width: 200px;
+  }
+  .upload-progress-inline {
+    flex: 1;
+    max-width: 300px;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .upload-progress-bar {
+    flex: 1;
+    height: 6px;
+    background: #e5e7eb;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .upload-progress-fill {
+    height: 100%;
+    background: #4f46e5;
+    transition: width 0.15s;
+  }
+  .upload-progress-text {
+    font-size: 0.85rem;
+    color: #666;
   }
   .book-grid {
     display: grid;

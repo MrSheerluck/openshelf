@@ -7,7 +7,7 @@ use axum::{
 use quick_xml::events::Event;
 use quick_xml::Reader;
 use rusqlite::params;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::io::{Cursor, Read};
 use std::sync::Arc;
 use uuid::Uuid;
@@ -29,7 +29,7 @@ pub struct Book {
     pub format: String,
     pub file_size: Option<i64>,
     pub page_count: Option<i32>,
-    pub current_page: Option<i32>,
+    pub current_page: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -59,7 +59,7 @@ fn extract_epub_cover(epub_bytes: &[u8]) -> Option<(Vec<u8>, String)> {
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(ref e)) => {
+            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
                 let elem_name = e.name();
                 if elem_name.as_ref() == b"rootfile" {
                     for attr in e.attributes().flatten() {
@@ -76,6 +76,7 @@ fn extract_epub_cover(epub_bytes: &[u8]) -> Option<(Vec<u8>, String)> {
         buf.clear();
     }
 
+    eprintln!("[cover] OPF path: {opf_path:?}");
     if opf_path.is_empty() {
         return None;
     }
@@ -92,9 +93,10 @@ fn extract_epub_cover(epub_bytes: &[u8]) -> Option<(Vec<u8>, String)> {
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or_default();
 
-    let mut cover_id = String::new();
-    let mut cover_href = String::new();
-    let mut seen_cover_id = false;
+    let mut items: Vec<(String, String, String)> = Vec::new();
+    let mut cover_id: Option<String> = None;
+    let mut cover_property_href: Option<String> = None;
+    let mut buf = Vec::new();
 
     let mut reader = Reader::from_reader(Cursor::new(&opf_bytes));
     reader.config_mut().trim_text(true);
@@ -105,43 +107,48 @@ fn extract_epub_cover(epub_bytes: &[u8]) -> Option<(Vec<u8>, String)> {
                 let tag_name = e.name();
                 let tag_name = tag_name.as_ref();
 
-                if tag_name == b"meta" && !seen_cover_id {
+                if tag_name == b"meta" {
                     let mut name = String::new();
+                    let mut prop = String::new();
                     let mut content = String::new();
                     for attr in e.attributes().flatten() {
                         let key = String::from_utf8_lossy(attr.key.as_ref());
                         let val = String::from_utf8_lossy(&attr.value);
-                        if key == "name" && val == "cover" {
-                            name = val.to_string();
-                        }
-                        if key == "content" {
-                            content = val.to_string();
+                        match key.as_ref() {
+                            "name" => name = val.to_string(),
+                            "property" => prop = val.to_string(),
+                            "content" => content = val.to_string(),
+                            _ => {}
                         }
                     }
-                    if name == "cover" && !content.is_empty() {
-                        cover_id = content;
-                        seen_cover_id = true;
+                    if (name == "cover" || prop == "cover-image") && !content.is_empty() {
+                        cover_id = Some(content.clone());
+                        eprintln!("[cover] found cover meta: {name}/{prop} -> {content}");
                     }
                 }
 
-                if !cover_id.is_empty()
-                    && (tag_name == b"item" || tag_name == b"itemref")
-                {
+                if tag_name == b"item" {
                     let mut id = String::new();
                     let mut href = String::new();
+                    let mut properties = String::new();
+                    let mut media_type = String::new();
                     for attr in e.attributes().flatten() {
                         let key = String::from_utf8_lossy(attr.key.as_ref());
                         let val = String::from_utf8_lossy(&attr.value);
-                        if key == "id" {
-                            id = val.to_string();
-                        }
-                        if key == "href" {
-                            href = val.to_string();
+                        match key.as_ref() {
+                            "id" => id = val.to_string(),
+                            "href" => href = val.to_string(),
+                            "properties" => properties = val.to_string(),
+                            "media-type" => media_type = val.to_string(),
+                            _ => {}
                         }
                     }
-                    if id == cover_id && !href.is_empty() {
-                        cover_href = href;
-                        break;
+                    if !href.is_empty() {
+                        if properties.split_whitespace().any(|p| p == "cover-image") {
+                            cover_property_href = Some(href.clone());
+                            eprintln!("[cover] found cover item by property: {href}");
+                        }
+                        items.push((id, href, media_type));
                     }
                 }
             }
@@ -152,15 +159,47 @@ fn extract_epub_cover(epub_bytes: &[u8]) -> Option<(Vec<u8>, String)> {
         buf.clear();
     }
 
-    if cover_href.is_empty() {
-        return None;
+    eprintln!("[cover] total items in manifest: {}", items.len());
+    eprintln!(
+        "[cover] image items: {:?}",
+        items
+            .iter()
+            .filter(|(_, _, mt)| mt.starts_with("image/"))
+            .collect::<Vec<_>>()
+    );
+
+    let cover_href = if let Some(href) = cover_property_href {
+        Some(href)
+    } else if let Some(ref id) = cover_id {
+        items
+            .iter()
+            .find(|(item_id, _, _)| item_id == id)
+            .map(|(_, href, _)| href.clone())
+    } else {
+        None
     }
+    .or_else(|| {
+        items
+            .iter()
+            .find(|(id, href, mt)| {
+                let lower_id = id.to_lowercase();
+                let lower_href = href.to_lowercase();
+                lower_id.contains("cover")
+                    || lower_href.contains("cover")
+                    || lower_href.starts_with("cover.")
+            })
+            .map(|(_, href, _)| href.clone())
+    })?;
+
+    eprintln!("[cover] resolved cover_href: {cover_href}");
 
     let cover_path = if opf_dir.is_empty() {
         cover_href.clone()
     } else {
         format!("{}/{}", opf_dir, cover_href)
     };
+
+    eprintln!("[cover] archive path: {cover_path}");
 
     let cover_bytes = {
         let mut f = archive.by_name(&cover_path).ok()?;
@@ -265,7 +304,14 @@ pub async fn upload_book(
     let file_size = bytes.len() as i64;
 
     let cover_result = if format == "epub" {
-        extract_epub_cover(&bytes)
+        eprintln!("[upload] attempting cover extraction");
+        let result = extract_epub_cover(&bytes);
+        if result.is_some() {
+            eprintln!("[upload] cover extracted");
+        } else {
+            eprintln!("[upload] no cover found in EPUB");
+        }
+        result
     } else {
         None
     };
@@ -317,37 +363,51 @@ pub async fn list_books(
 ) -> Result<Json<Vec<Book>>, StatusCode> {
     let db = state.db.lock().await;
 
-    let mut stmt = db
-        .prepare(
-            "SELECT id, title, author, description, publisher, isbn, language, cover_path, \
-             file_path, format, file_size, page_count, current_page, created_at, updated_at \
-             FROM books ORDER BY created_at DESC",
-        )
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let mut stmt = match db.prepare(
+        "SELECT id, title, author, description, publisher, isbn, language, cover_path, \
+         file_path, format, file_size, page_count, current_page, created_at, updated_at \
+         FROM books ORDER BY created_at DESC",
+    ) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("[list_books] prepare error: {e}");
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
 
-    let books = stmt
-        .query_map([], |row| {
-            Ok(Book {
-                id: row.get(0)?,
-                title: row.get(1)?,
-                author: row.get(2)?,
-                description: row.get(3)?,
-                publisher: row.get(4)?,
-                isbn: row.get(5)?,
-                language: row.get(6)?,
-                cover_path: row.get(7)?,
-                file_path: row.get(8)?,
-                format: row.get(9)?,
-                file_size: row.get(10)?,
-                page_count: row.get(11)?,
-                current_page: row.get(12)?,
-                created_at: row.get(13)?,
-                updated_at: row.get(14)?,
-            })
+    let rows = match stmt.query_map([], |row| {
+        Ok(Book {
+            id: row.get(0)?,
+            title: row.get(1)?,
+            author: row.get(2)?,
+            description: row.get(3)?,
+            publisher: row.get(4)?,
+            isbn: row.get(5)?,
+            language: row.get(6)?,
+            cover_path: row.get(7)?,
+            file_path: row.get(8)?,
+            format: row.get(9)?,
+            file_size: row.get(10)?,
+            page_count: row.get(11)?,
+            current_page: row.get(12)?,
+            created_at: row.get(13)?,
+            updated_at: row.get(14)?,
         })
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    }) {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("[list_books] query error: {e}");
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+
+    let mut books: Vec<Book> = Vec::new();
+    for row in rows {
+        match row {
+            Ok(b) => books.push(b),
+            Err(e) => eprintln!("[list_books] skipping bad row: {e}"),
+        }
+    }
 
     Ok(Json(books))
 }
@@ -453,6 +513,25 @@ pub async fn serve_book_cover(
         .header(header::CACHE_CONTROL, "public, max-age=86400")
         .body(bytes.into())
         .unwrap())
+}
+
+#[derive(Deserialize)]
+pub struct ProgressUpdate {
+    pub cfi: String,
+}
+
+pub async fn save_progress(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Json(body): Json<ProgressUpdate>,
+) -> Result<StatusCode, StatusCode> {
+    let db = state.db.lock().await;
+    db.execute(
+        "UPDATE books SET current_page = ?1, updated_at = datetime('now') WHERE id = ?2",
+        params![body.cfi, id],
+    )
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 pub async fn delete_book(
