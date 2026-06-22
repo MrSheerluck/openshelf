@@ -38,9 +38,11 @@ fi
 tmp="$(mktemp)"
 existing="$(crontab -l 2>/dev/null || true)"
 
-if echo "${existing}" | grep -Fq "docker compose pull"; then
-  echo "Existing OpenShelf cron job found: replacing it."
-  filtered="$(echo "${existing}" | grep -Fv "docker compose pull" || true)"
+# Match the OpenShelf cron line specifically (by the app dir we install to),
+# so we never accidentally clobber other apps' cron entries.
+if echo "${existing}" | grep -Fq "cd ${APP_DIR}"; then
+  echo "Existing OpenShelf cron job found — replacing it."
+  filtered="$(echo "${existing}" | grep -Fv "cd ${APP_DIR}" || true)"
 else
   filtered="${existing}"
 fi

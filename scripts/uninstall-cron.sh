@@ -6,13 +6,15 @@ set -euo pipefail
 
 existing="$(crontab -l 2>/dev/null || true)"
 
-if ! echo "${existing}" | grep -Fq "docker compose pull"; then
+# Match the OpenShelf cron line specifically (by the app dir we install to),
+# so we never accidentally clobber other apps' cron entries.
+if ! echo "${existing}" | grep -Fq "cd ${APP_DIR}"; then
   echo "No OpenShelf cron job installed. Nothing to do."
   exit 0
 fi
 
 tmp="$(mktemp)"
-echo "${existing}" | grep -Fv "docker compose pull" | grep -v '^$' > "${tmp}" || true
+echo "${existing}" | grep -Fv "cd ${APP_DIR}" | grep -v '^$' > "${tmp}" || true
 
 if [ -s "${tmp}" ]; then
   crontab "${tmp}"
