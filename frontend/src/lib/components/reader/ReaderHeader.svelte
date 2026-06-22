@@ -5,6 +5,7 @@
     onBack: () => void;
     onToggleToc: () => void;
     onToggleTypography: () => void;
+    onToggleHighlights: () => void;
   }
 
   let {
@@ -13,6 +14,7 @@
     onBack,
     onToggleToc,
     onToggleTypography,
+    onToggleHighlights,
   }: Props = $props();
 </script>
 
@@ -36,6 +38,17 @@
         </svg>
       </button>
     {/if}
+    <button
+      class="header-btn"
+      onclick={onToggleHighlights}
+      title="Highlights"
+      aria-label="Highlights"
+    >
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="m9 11-6 6v3h9l3-3"></path>
+        <path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"></path>
+      </svg>
+    </button>
     <button
       class="header-btn typo-btn"
       onclick={onToggleTypography}
@@ -93,7 +106,7 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 50vw;
+    max-width: 40vw;
     opacity: 0.8;
   }
 

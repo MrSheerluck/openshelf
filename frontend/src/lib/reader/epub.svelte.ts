@@ -1,9 +1,16 @@
-import type { ThemeName, TocItem, Typography } from "./types";
+import type { ThemeName, TocItem, Typography, Highlight, HighlightColor } from "./types";
 import { themes as defaultThemes, fontFamilyCss, themeByName } from "./themes";
 
 const WORDS_PER_MINUTE = 250;
 const STYLESHEET_KEY = "openshelf-reader";
 const PAGE_TURN_TIMEOUT = 2000;
+
+const HIGHLIGHT_FILLS: Record<HighlightColor, { fill: string; "fill-opacity": string }> = {
+  yellow: { fill: "rgb(255, 213, 79)",   "fill-opacity": "0.35" },
+  green:  { fill: "rgb(102, 187, 106)",  "fill-opacity": "0.35" },
+  blue:   { fill: "rgb(66, 165, 245)",   "fill-opacity": "0.35" },
+  pink:   { fill: "rgb(240, 98, 146)",   "fill-opacity": "0.35" },
+};
 
 export interface EpubControllerOptions {
   fileUrl: string;
@@ -283,6 +290,15 @@ function buildReaderCss(themeName: ThemeName, typography: Typography): string {
     h1:first-of-type, h2:first-of-type, h3:first-of-type {
       margin-top: 0 !important;
     }
+
+    .hl-yellow { background: rgba(255, 213, 79, 0.35) !important; }
+    .hl-green  { background: rgba(102, 187, 106, 0.35) !important; }
+    .hl-blue   { background: rgba(66, 165, 245, 0.35) !important; }
+    .hl-pink   { background: rgba(240, 98, 146, 0.35) !important; }
+
+    ::selection {
+      background: rgba(79, 70, 229, 0.25);
+    }
   `;
 }
 
@@ -302,6 +318,8 @@ export class EpubController {
   private options: EpubControllerOptions;
   private mounted = false;
   private onCfiChange: ((cfi: string) => void) | null = null;
+  private onSelectCb: ((cfiRange: string, text: string, rect: DOMRect) => void) | null = null;
+  private onHighlightClickCb: ((cfiRange: string) => void) | null = null;
 
   constructor(options: EpubControllerOptions) {
     this.options = options;
@@ -309,6 +327,14 @@ export class EpubController {
 
   onProgress(cb: (cfi: string) => void): void {
     this.onCfiChange = cb;
+  }
+
+  onSelect(cb: (cfiRange: string, text: string, rect: DOMRect) => void): void {
+    this.onSelectCb = cb;
+  }
+
+  onHighlightClick(cb: (cfiRange: string) => void): void {
+    this.onHighlightClickCb = cb;
   }
 
   async mount(el: HTMLElement): Promise<void> {
@@ -389,6 +415,71 @@ export class EpubController {
       this.rendition.on("rendered", () => {
         this.pageTurning = null;
       });
+
+      this.rendition.on("selected", (cfiRange: string, contents: any) => {
+        try {
+          const sel = contents.window.getSelection();
+          const text = sel ? sel.toString().trim() : "";
+          if (!text || !this.onSelectCb) return;
+          const range = sel.getRangeAt(0);
+          const rect = range.getBoundingClientRect();
+          this.onSelectCb(cfiRange, text, rect);
+        } catch {}
+      });
+
+      let downX = 0, downY = 0, downTime = 0;
+      this.rendition.on("mousedown", (e: any, contents: any) => {
+        const x = e.clientX ?? (e.touches?.[0]?.clientX);
+        const y = e.clientY ?? (e.touches?.[0]?.clientY);
+        downX = x ?? 0;
+        downY = y ?? 0;
+        downTime = Date.now();
+      });
+
+      this.rendition.on("mouseup", (e: any, contents: any) => {
+        if (!contents) return;
+        try {
+          const sel = contents.window.getSelection();
+          if (sel && sel.toString().trim().length > 0) return;
+        } catch {}
+        const x = e.clientX ?? (e.changedTouches?.[0]?.clientX);
+        const y = e.clientY ?? (e.changedTouches?.[0]?.clientY);
+        if (x === undefined) return;
+        const dx = Math.abs(x - downX);
+        const dy = Math.abs(y - downY);
+        const elapsed = Date.now() - downTime;
+        if (dx > 8 || dy > 8 || elapsed > 400) return;
+        const w = contents.window?.innerWidth ?? window.innerWidth;
+        if (x / w < 0.3) this.prev();
+        else this.next();
+      });
+
+      this.rendition.on("touchstart", (e: any, contents: any) => {
+        if (!contents) return;
+        const x = e.touches?.[0]?.clientX;
+        const y = e.touches?.[0]?.clientY;
+        downX = x ?? 0;
+        downY = y ?? 0;
+        downTime = Date.now();
+      }, { passive: true });
+
+      this.rendition.on("touchend", (e: any, contents: any) => {
+        if (!contents) return;
+        try {
+          const sel = contents.window.getSelection();
+          if (sel && sel.toString().trim().length > 0) return;
+        } catch {}
+        const x = e.changedTouches?.[0]?.clientX;
+        const y = e.changedTouches?.[0]?.clientY;
+        if (x === undefined) return;
+        const dx = Math.abs(x - downX);
+        const dy = Math.abs(y - downY);
+        const elapsed = Date.now() - downTime;
+        if (dx > 8 || dy > 8 || elapsed > 400) return;
+        const w = contents.window?.innerWidth ?? window.innerWidth;
+        if (x / w < 0.3) this.prev();
+        else this.next();
+      }, { passive: true });
     } catch (e) {
       console.error("EPUB render error:", e);
       this.error = `Failed to render book: ${e instanceof Error ? e.message : String(e)}`;
@@ -450,6 +541,43 @@ export class EpubController {
       this.bookObj = null;
     }
     this.mounted = false;
+  }
+
+  addHighlight(cfiRange: string, color: HighlightColor): void {
+    if (!this.rendition) return;
+    const fill = HIGHLIGHT_FILLS[color] ?? HIGHLIGHT_FILLS.yellow;
+    this.rendition.annotations.add(
+      "highlight",
+      cfiRange,
+      {},
+      () => {
+        if (this.onHighlightClickCb) this.onHighlightClickCb(cfiRange);
+      },
+      `hl-${color}`,
+      fill,
+    );
+  }
+
+  removeHighlight(cfiRange: string): void {
+    this.rendition?.annotations.remove(cfiRange, "highlight");
+  }
+
+  renderHighlights(highlights: Highlight[]): void {
+    if (!this.rendition) return;
+    for (const h of highlights) {
+      this.addHighlight(h.cfiRange, h.color);
+    }
+  }
+
+  clearSelection(): void {
+    if (!this.rendition) return;
+    try {
+      const contents = this.rendition.getContents();
+      for (const c of contents) {
+        const sel = c.window?.getSelection();
+        if (sel) sel.removeAllRanges();
+      }
+    } catch {}
   }
 
   private injectToCurrentViews(): void {

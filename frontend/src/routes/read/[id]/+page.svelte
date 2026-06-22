@@ -2,14 +2,19 @@
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
   import { api } from "$lib/api";
-  import type { Book, ThemeName, Typography } from "$lib/reader/types";
+  import type { Book, ThemeName, Typography, HighlightColor, Highlight } from "$lib/reader/types";
   import { ReaderSettingsStore } from "$lib/reader/settings.svelte";
+  import { HighlightsStore } from "$lib/reader/highlights.svelte";
   import { EpubController } from "$lib/reader/epub.svelte";
   import ReaderHeader from "$lib/components/reader/ReaderHeader.svelte";
   import ReaderFooter from "$lib/components/reader/ReaderFooter.svelte";
   import TocPanel from "$lib/components/reader/TocPanel.svelte";
   import BookViewport from "$lib/components/reader/BookViewport.svelte";
   import TypographyPanel from "$lib/components/reader/TypographyPanel.svelte";
+  import SelectionMenu from "$lib/components/reader/SelectionMenu.svelte";
+  import DictionaryPopup from "$lib/components/reader/DictionaryPopup.svelte";
+  import NoteEditor from "$lib/components/reader/NoteEditor.svelte";
+  import HighlightsList from "$lib/components/reader/HighlightsList.svelte";
 
   const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
   const IDLE_HIDE_MS = 3000;
@@ -22,9 +27,16 @@
   let showControls = $state(true);
   let showToc = $state(false);
   let showTypography = $state(false);
+  let showHighlights = $state(false);
 
   let settings = $state<ReaderSettingsStore | null>(null);
+  let highlightsStore = $state<HighlightsStore | null>(null);
   let controller = $state<EpubController | null>(null);
+
+  type Selection = { cfiRange: string; text: string; x: number; y: number } | null;
+  let selection = $state<Selection>(null);
+  let dictWord = $state<{ word: string; x: number; y: number } | null>(null);
+  let noteEditor = $state<{ highlight: Highlight; x: number; y: number } | null>(null);
 
   let minutesLeft = $derived(
     controller?.estimatedBookMinutes
@@ -106,6 +118,10 @@
     if (!settings) {
       settings = new ReaderSettingsStore(id);
     }
+    if (!highlightsStore) {
+      highlightsStore = new HighlightsStore(id);
+      highlightsStore.load();
+    }
     const stored = settings.load();
     const c = new EpubController({
       fileUrl: fileUrl(),
@@ -117,8 +133,31 @@
       if (settings) settings.save({ cfi });
       saveProgress(cfi);
     });
+    c.onSelect((cfiRange, text, rect) => {
+      selection = { cfiRange, text, x: rect.left + rect.width / 2, y: rect.top };
+    });
+    c.onHighlightClick((cfiRange) => {
+      if (!highlightsStore) return;
+      const h = highlightsStore.findByCfi(cfiRange);
+      if (h) {
+        const range = c.rendition?.annotations._annotations[encodeURI(cfiRange + "highlight")]?.mark;
+        let x = window.innerWidth / 2, y = window.innerHeight / 2;
+        try {
+          if (range && range.getBoundingClientRect) {
+            const r = range.getBoundingClientRect();
+            x = r.left + r.width / 2;
+            y = r.top;
+          }
+        } catch {}
+        noteEditor = { highlight: h, x, y };
+      }
+    });
     controller = c;
-    c.mount(el);
+    c.mount(el).then(() => {
+      if (highlightsStore) {
+        c.renderHighlights(highlightsStore.highlights);
+      }
+    });
   }
 
   function setTheme(t: ThemeName) {
@@ -133,6 +172,57 @@
     settings.typography = typography;
     controller?.setTypography(typography);
     settings.save();
+  }
+
+  function handleHighlight(color: HighlightColor) {
+    if (!selection || !highlightsStore || !controller) return;
+    highlightsStore.add(selection.cfiRange, selection.text, color);
+    controller.addHighlight(selection.cfiRange, color);
+    controller.clearSelection();
+    selection = null;
+  }
+
+  function handleDictionary() {
+    if (!selection) return;
+    const word = selection.text.split(/\s+/)[0]?.replace(/[^\w'-]/g, "");
+    if (word) {
+      dictWord = { word, x: selection.x, y: selection.y };
+    }
+    selection = null;
+  }
+
+  function handleCopy() {
+    selection = null;
+  }
+
+  function closeSelection() {
+    selection = null;
+    controller?.clearSelection();
+  }
+
+  function handleSaveNote(note: string | null) {
+    if (!noteEditor || !highlightsStore) return;
+    highlightsStore.updateNote(noteEditor.highlight.id, note);
+    noteEditor = null;
+  }
+
+  function handleDeleteHighlight() {
+    if (!noteEditor || !highlightsStore || !controller) return;
+    highlightsStore.remove(noteEditor.highlight.id);
+    controller.removeHighlight(noteEditor.highlight.cfiRange);
+    noteEditor = null;
+  }
+
+  function handleDeleteHighlightFromList(id: string) {
+    if (!highlightsStore || !controller) return;
+    const h = highlightsStore.highlights.find((x) => x.id === id);
+    if (h) controller.removeHighlight(h.cfiRange);
+    highlightsStore.remove(id);
+  }
+
+  function handleHighlightSelect(cfiRange: string) {
+    controller?.display(cfiRange);
+    showHighlights = false;
   }
 
   function prevPage() {
@@ -156,6 +246,18 @@
     if (book?.format !== "epub") return;
     if (showToc) {
       if (e.key === "Escape") showToc = false;
+      return;
+    }
+    if (showHighlights) {
+      if (e.key === "Escape") showHighlights = false;
+      return;
+    }
+    if (selection || dictWord || noteEditor) {
+      if (e.key === "Escape") {
+        selection = null;
+        dictWord = null;
+        noteEditor = null;
+      }
       return;
     }
     if (e.key === "ArrowLeft") prevPage();
@@ -182,7 +284,7 @@
   function scheduleAutoHide() {
     if (idleTimer) clearTimeout(idleTimer);
     idleTimer = setTimeout(() => {
-      if (!showToc && !showTypography) showControls = false;
+      if (!showToc && !showTypography && !showHighlights) showControls = false;
     }, IDLE_HIDE_MS);
   }
 
@@ -192,7 +294,7 @@
   }
 
   $effect(() => {
-    if (showToc || showTypography) {
+    if (showToc || showTypography || showHighlights) {
       if (idleTimer) {
         clearTimeout(idleTimer);
         idleTimer = null;
@@ -227,6 +329,7 @@
   onkeydown={handleKeydown}
   onpointermove={handleActivity}
   ontouchstart={handleActivity}
+  onclick={() => { if (selection) closeSelection(); if (dictWord) dictWord = null; if (noteEditor) noteEditor = null; }}
 />
 
 <div
@@ -245,6 +348,7 @@
       onBack={goBack}
       onToggleToc={() => (showToc = !showToc)}
       onToggleTypography={() => (showTypography = !showTypography)}
+      onToggleHighlights={() => (showHighlights = !showHighlights)}
     />
   </div>
 
@@ -256,8 +360,6 @@
     pageTurning={controller?.pageTurning ?? null}
     onViewerMount={handleViewerMount}
     onDownload={downloadFile}
-    onPrev={prevPage}
-    onNext={nextPage}
   />
 
   {#if book?.format === "epub" && !loading && !error}
@@ -288,6 +390,47 @@
       onChange={setTypography}
       onSetTheme={setTheme}
       onClose={() => (showTypography = false)}
+    />
+  {/if}
+
+  {#if showHighlights && highlightsStore && book?.format === "epub"}
+    <HighlightsList
+      highlights={highlightsStore.highlights}
+      onSelect={handleHighlightSelect}
+      onDelete={handleDeleteHighlightFromList}
+      onClose={() => (showHighlights = false)}
+    />
+  {/if}
+
+  {#if selection}
+    <SelectionMenu
+      x={selection.x}
+      y={selection.y}
+      text={selection.text}
+      onHighlight={handleHighlight}
+      onDictionary={handleDictionary}
+      onCopy={handleCopy}
+      onClose={closeSelection}
+    />
+  {/if}
+
+  {#if dictWord}
+    <DictionaryPopup
+      word={dictWord.word}
+      x={dictWord.x}
+      y={dictWord.y}
+      onClose={() => (dictWord = null)}
+    />
+  {/if}
+
+  {#if noteEditor}
+    <NoteEditor
+      highlight={noteEditor.highlight}
+      x={noteEditor.x}
+      y={noteEditor.y}
+      onSave={handleSaveNote}
+      onDelete={handleDeleteHighlight}
+      onClose={() => (noteEditor = null)}
     />
   {/if}
 </div>

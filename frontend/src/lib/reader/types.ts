@@ -1,5 +1,6 @@
 export type ThemeName = "light" | "sepia" | "dark" | "cream" | "green" | "night";
 export type BookFormat = "epub" | "pdf" | "mobi" | string;
+export type HighlightColor = "yellow" | "green" | "blue" | "pink";
 
 export interface Theme {
   name: ThemeName;
@@ -37,4 +38,13 @@ export interface ReaderSettings {
   theme: ThemeName;
   typography: Typography;
   cfi?: string;
+}
+
+export interface Highlight {
+  id: string;
+  cfiRange: string;
+  text: string;
+  color: HighlightColor;
+  note: string | null;
+  createdAt: number;
 }
