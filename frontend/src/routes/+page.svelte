@@ -1,11 +1,13 @@
 <script lang="ts">
   import * as auth from "$lib/auth.svelte.ts";
   import { api } from "$lib/api";
+  import { goto } from "$app/navigation";
 
   interface Book {
     id: string;
     title: string;
     author: string | null;
+    cover_path: string | null;
     format: string;
     file_size: number | null;
     created_at: string;
@@ -16,6 +18,17 @@
   let dragOver = $state(false);
   let error = $state("");
   let loaded = $state(false);
+  let deleteId = $state<string | null>(null);
+  let deleting = $state(false);
+
+  const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
+
+  function coverUrl(book: Book): string | null {
+    if (book.cover_path) {
+      return `${API_URL}/api/books/${book.id}/cover`;
+    }
+    return null;
+  }
 
   async function loadBooks() {
     try {
@@ -81,6 +94,22 @@
     dragOver = false;
   }
 
+  async function confirmDelete() {
+    if (!deleteId) return;
+    deleting = true;
+    try {
+      const res = await api(`/api/books/${deleteId}`, { method: "DELETE" });
+      if (res.ok) {
+        books = books.filter((b) => b.id !== deleteId);
+      }
+    } catch {
+      // ignore
+    } finally {
+      deleting = false;
+      deleteId = null;
+    }
+  }
+
   function formatSize(bytes: number | null): string {
     if (!bytes) return "";
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
@@ -108,11 +137,11 @@
     {:else if books.length === 0}
       <div class="empty-state">
         <h2>Upload your first book</h2>
-        <p>Drag and drop an EPUB file or click to browse.</p>
+        <p>Drag and drop an EPUB, PDF, or MOBI file or click to browse.</p>
         <label class="upload-area" class:dragover={dragOver}>
           <input
             type="file"
-            accept=".epub"
+            accept=".epub,.pdf,.mobi"
             onchange={handleFileInput}
             disabled={uploading}
           />
@@ -131,7 +160,7 @@
         <label class="upload-btn">
           <input
             type="file"
-            accept=".epub"
+            accept=".epub,.pdf,.mobi"
             onchange={handleFileInput}
             disabled={uploading}
           />
@@ -141,18 +170,32 @@
           <p class="error">{error}</p>
         {/if}
         <div class="book-grid">
-          {#each books as book}
-            <div class="book-card">
-              <div class="book-cover" class:epub={book.format === "epub"} class:pdf={book.format === "pdf"}>
-                <span class="cover-format">{book.format.toUpperCase()}</span>
-              </div>
-              <div class="book-info">
-                <p class="book-title">{book.title}</p>
-                {#if book.author}
-                  <p class="book-author">{book.author}</p>
-                {/if}
-                <p class="book-meta">{formatSize(book.file_size)}</p>
-              </div>
+          {#each books as book (book.id)}
+            <div class="book-card" role="link" tabindex="0">
+              <button class="book-card-link" onclick={() => goto(`/read/${book.id}`)}>
+                <div class="book-cover" class:epub={book.format === "epub"} class:pdf={book.format === "pdf"} class:mobi={book.format === "mobi"}>
+                  {#if coverUrl(book)}
+                    <img src={coverUrl(book)!} alt={book.title} class="cover-img" />
+                  {:else}
+                    <span class="cover-format">{book.format.toUpperCase()}</span>
+                  {/if}
+                </div>
+                <div class="book-info">
+                  <p class="book-title">{book.title}</p>
+                  {#if book.author}
+                    <p class="book-author">{book.author}</p>
+                  {/if}
+                  <p class="book-meta">{formatSize(book.file_size)}</p>
+                </div>
+              </button>
+              <button
+                class="delete-btn"
+                title="Delete book"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  deleteId = book.id;
+                }}
+              >&times;</button>
             </div>
           {/each}
         </div>
@@ -160,6 +203,23 @@
     {/if}
   </main>
 </div>
+
+{#if deleteId}
+  <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+  <div class="modal-overlay" role="dialog" aria-modal="true" onclick={() => (deleteId = null)}>
+    <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+    <div class="modal" onclick={(e) => e.stopPropagation()}>
+      <p>Delete this book?</p>
+      <p class="modal-sub">This cannot be undone.</p>
+      <div class="modal-actions">
+        <button class="modal-cancel" onclick={() => (deleteId = null)}>Cancel</button>
+        <button class="modal-confirm" onclick={confirmDelete} disabled={deleting}>
+          {deleting ? "Deleting..." : "Delete"}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <style>
   .app {
@@ -282,14 +342,21 @@
     gap: 1rem;
   }
   .book-card {
-    cursor: pointer;
+    position: relative;
     border-radius: 8px;
-    overflow: hidden;
+    overflow: visible;
     transition: transform 0.15s, box-shadow 0.15s;
   }
   .book-card:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
+  .book-card-link {
+    all: unset;
+    display: block;
+    cursor: pointer;
+    border-radius: 8px;
+    overflow: hidden;
   }
   .book-cover {
     aspect-ratio: 2/3;
@@ -297,12 +364,22 @@
     align-items: center;
     justify-content: center;
     border-radius: 6px;
+    overflow: hidden;
+    position: relative;
   }
   .book-cover.epub {
     background: linear-gradient(135deg, #e0c3fc, #8ec5fc);
   }
   .book-cover.pdf {
     background: linear-gradient(135deg, #fcc3c3, #fc8e8e);
+  }
+  .book-cover.mobi {
+    background: linear-gradient(135deg, #c3fce0, #8efcb0);
+  }
+  .cover-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
   }
   .cover-format {
     font-size: 0.75rem;
@@ -333,5 +410,88 @@
     font-size: 0.75rem;
     color: #aaa;
     margin: 0.25rem 0 0;
+  }
+
+  .delete-btn {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 1px solid #d1d5db;
+    background: #fff;
+    color: #999;
+    font-size: 0.9rem;
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    z-index: 1;
+    transition: color 0.15s, border-color 0.15s;
+    padding: 0;
+  }
+  .book-card:hover .delete-btn {
+    display: flex;
+  }
+  .delete-btn:hover {
+    color: #dc2626;
+    border-color: #dc2626;
+  }
+
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+  .modal {
+    background: #fff;
+    border-radius: 12px;
+    padding: 1.5rem;
+    min-width: 280px;
+    text-align: center;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+  }
+  .modal p {
+    margin: 0 0 0.25rem;
+    font-size: 0.95rem;
+    color: #111;
+  }
+  .modal-sub {
+    color: #888 !important;
+    font-size: 0.85rem !important;
+    margin-bottom: 1rem !important;
+  }
+  .modal-actions {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+    margin-top: 1rem;
+  }
+  .modal-cancel {
+    padding: 0.4rem 1rem;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background: #fff;
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
+  .modal-confirm {
+    padding: 0.4rem 1rem;
+    border: none;
+    border-radius: 6px;
+    background: #dc2626;
+    color: #fff;
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
+  .modal-confirm:disabled {
+    opacity: 0.6;
+    cursor: default;
   }
 </style>
