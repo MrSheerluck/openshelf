@@ -27,6 +27,14 @@
   function setFontSize(value: number) {
     onChange({ ...typography, fontSize: Math.max(80, Math.min(200, value)) });
   }
+
+  function dotBorder(bg: string): string {
+    if (bg === "#0a0a0a" || bg === "#1a1a1a") return "#444";
+    if (bg === "#f4ecd8") return "#d4c9a8";
+    if (bg === "#f7f3e9") return "#e0d9c4";
+    if (bg === "#e4ede4") return "#c4d4c4";
+    return "#ccc";
+  }
 </script>
 
 <div class="typo-overlay" onclick={onClose} role="presentation">
@@ -84,7 +92,7 @@
             onclick={() => onSetTheme(t.name)}
             title={t.label}
           >
-            <span class="theme-dot" style="background: {t.bg}; border-color: {t.bg === '#1a1a1a' ? '#444' : t.bg === '#f4ecd8' ? '#d4c9a8' : '#ccc'};"></span>
+            <span class="theme-dot" style="background: {t.bg}; border-color: {dotBorder(t.bg)};"></span>
             <span class="theme-label">{t.label}</span>
           </button>
         {/each}
@@ -116,7 +124,7 @@
 
   .typo-panel {
     width: 100%;
-    max-width: 420px;
+    max-width: 440px;
     background: var(--reader-panel-bg, #fff);
     color: var(--reader-panel-fg, #1a1a1a);
     border-top-left-radius: 16px;
@@ -124,6 +132,8 @@
     padding: 0.5rem 1.25rem 2rem;
     box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.2);
     animation: slide-up 0.22s ease-out;
+    max-height: 85vh;
+    overflow-y: auto;
   }
 
   @keyframes slide-up {
@@ -181,8 +191,9 @@
     padding: 0.6rem 0.5rem;
     cursor: pointer;
     color: var(--reader-panel-fg, #1a1a1a);
-    font-size: 0.95rem;
+    font-size: 0.9rem;
     transition: border-color 0.15s, color 0.15s;
+    text-align: center;
   }
   .font-family-btn:hover {
     background: var(--reader-hover, rgba(0, 0, 0, 0.04));
@@ -248,12 +259,12 @@
   }
 
   .theme-options {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
     gap: 0.5rem;
   }
 
   .theme-option {
-    flex: 1;
     display: flex;
     flex-direction: column;
     align-items: center;

@@ -1,5 +1,5 @@
 import type { ThemeName, TocItem, Typography } from "./types";
-import { themes as defaultThemes, fontFamilyCss } from "./themes";
+import { themes as defaultThemes, fontFamilyCss, themeByName } from "./themes";
 
 const WORDS_PER_MINUTE = 250;
 const STYLESHEET_KEY = "openshelf-reader";
@@ -23,12 +23,146 @@ function estimateReadingMinutes(locations: any, bookObj: any): number {
 }
 
 function buildReaderCss(themeName: ThemeName, typography: Typography): string {
-  const t = defaultThemes.find((th) => th.name === themeName) ?? defaultThemes[0];
+  const t = themeByName(themeName);
   const fam = fontFamilyCss(typography.fontFamily);
   const align = typography.align === "justify" ? "justify" : "left";
-  const borderColor = t.name === "dark" ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)";
+  const borderColor = t.isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.10)";
 
   return `
+    @font-face {
+      font-family: "Literata";
+      font-style: normal;
+      font-weight: 400;
+      src: url("/fonts/literata-latin-400-normal.woff2") format("woff2");
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "Literata";
+      font-style: italic;
+      font-weight: 400;
+      src: url("/fonts/literata-latin-400-italic.woff2") format("woff2");
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "Literata";
+      font-style: normal;
+      font-weight: 500;
+      src: url("/fonts/literata-latin-500-normal.woff2") format("woff2");
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "Literata";
+      font-style: normal;
+      font-weight: 600;
+      src: url("/fonts/literata-latin-600-normal.woff2") format("woff2");
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "Literata";
+      font-style: normal;
+      font-weight: 700;
+      src: url("/fonts/literata-latin-700-normal.woff2") format("woff2");
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "Literata";
+      font-style: italic;
+      font-weight: 700;
+      src: url("/fonts/literata-latin-700-italic.woff2") format("woff2");
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "Andika";
+      font-style: normal;
+      font-weight: 400;
+      src: url("/fonts/andika-latin-400-normal.woff2") format("woff2");
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "Andika";
+      font-style: italic;
+      font-weight: 400;
+      src: url("/fonts/andika-latin-400-italic.woff2") format("woff2");
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "Andika";
+      font-style: normal;
+      font-weight: 700;
+      src: url("/fonts/andika-latin-700-normal.woff2") format("woff2");
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "Andika";
+      font-style: italic;
+      font-weight: 700;
+      src: url("/fonts/andika-latin-700-italic.woff2") format("woff2");
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "Libertinus Mono";
+      font-style: normal;
+      font-weight: 400;
+      src: url("/fonts/libertinus-mono-latin-400-normal.woff2") format("woff2");
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "Shantell Sans";
+      font-style: normal;
+      font-weight: 400;
+      src: url("/fonts/shantell-sans-latin-400-normal.woff2") format("woff2");
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "Shantell Sans";
+      font-style: italic;
+      font-weight: 400;
+      src: url("/fonts/shantell-sans-latin-400-italic.woff2") format("woff2");
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "Shantell Sans";
+      font-style: normal;
+      font-weight: 700;
+      src: url("/fonts/shantell-sans-latin-700-normal.woff2") format("woff2");
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "Shantell Sans";
+      font-style: italic;
+      font-weight: 700;
+      src: url("/fonts/shantell-sans-latin-700-italic.woff2") format("woff2");
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "Noto Sans";
+      font-style: normal;
+      font-weight: 400;
+      src: url("/fonts/noto-sans-latin-400-normal.woff2") format("woff2");
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "Noto Sans";
+      font-style: italic;
+      font-weight: 400;
+      src: url("/fonts/noto-sans-latin-400-italic.woff2") format("woff2");
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "Noto Sans";
+      font-style: normal;
+      font-weight: 700;
+      src: url("/fonts/noto-sans-latin-700-normal.woff2") format("woff2");
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "Noto Sans";
+      font-style: italic;
+      font-weight: 700;
+      src: url("/fonts/noto-sans-latin-700-italic.woff2") format("woff2");
+      font-display: swap;
+    }
+
     html {
       font-size: 16px;
       background: ${t.bg};

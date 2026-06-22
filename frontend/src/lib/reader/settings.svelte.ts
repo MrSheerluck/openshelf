@@ -1,5 +1,8 @@
 import type { ReaderSettings, ThemeName, Typography } from "./types";
-import { defaultTypography } from "./themes";
+import { defaultTypography, fontFamilies, themes } from "./themes";
+
+const validFonts = new Set(fontFamilies.map((f) => f.value));
+const validThemes = new Set(themes.map((t) => t.name));
 
 export class ReaderSettingsStore {
   bookId: string;
@@ -15,9 +18,11 @@ export class ReaderSettingsStore {
       const stored = localStorage.getItem(this.key());
       if (stored) {
         const parsed = JSON.parse(stored) as Partial<ReaderSettings>;
-        if (parsed.theme) this.theme = parsed.theme;
+        if (parsed.theme && validThemes.has(parsed.theme)) this.theme = parsed.theme;
         if (parsed.typography) {
-          this.typography = { ...defaultTypography, ...parsed.typography };
+          const merged = { ...defaultTypography, ...parsed.typography };
+          if (!validFonts.has(merged.fontFamily)) merged.fontFamily = defaultTypography.fontFamily;
+          this.typography = merged;
         }
         return { cfi: parsed.cfi };
       }

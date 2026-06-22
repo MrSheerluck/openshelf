@@ -1,4 +1,4 @@
-export type ThemeName = "light" | "sepia" | "dark";
+export type ThemeName = "light" | "sepia" | "dark" | "cream" | "green" | "night";
 export type BookFormat = "epub" | "pdf" | "mobi" | string;
 
 export interface Theme {
@@ -6,6 +6,7 @@ export interface Theme {
   bg: string;
   fg: string;
   label: string;
+  isDark: boolean;
 }
 
 export interface Book {
@@ -21,7 +22,7 @@ export interface TocItem {
   subitems: TocItem[];
 }
 
-export type FontFamily = "serif" | "sans" | "mono";
+export type FontFamily = "literata" | "andika" | "shantell" | "noto" | "libertinus";
 export type Alignment = "left" | "justify";
 
 export interface Typography {
