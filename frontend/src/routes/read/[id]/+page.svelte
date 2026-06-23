@@ -657,6 +657,8 @@
         totalSections={controller?.totalSections ?? 0}
         currentSectionIndex={controller?.currentSectionIndex ?? 0}
         canJumpBookmarks={(bookmarksStore?.bookmarks.length ?? 0) > 0}
+        currentPage={controller?.currentPage ?? 0}
+        totalPages={controller?.totalPages ?? 0}
         onPrevBookmark={() => jumpBookmark(-1)}
         onNextBookmark={() => jumpBookmark(1)}
       />

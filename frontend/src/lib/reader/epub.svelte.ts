@@ -420,6 +420,8 @@ export class EpubController {
   pageTurning = $state<"forward" | "backward" | null>(null);
   totalSections = $state(0);
   currentSectionIndex = $state(0);
+  currentPage = $state(0);
+  totalPages = $state(0);
 
   private options: EpubControllerOptions;
   private mounted = false;
@@ -532,6 +534,7 @@ export class EpubController {
           await this.bookObj.locations.generate(1024);
         }
         this.totalSections = this.bookObj.spine.length;
+        this.totalPages = this.bookObj.locations.length();
       });
 
       this.rendition.on("relocated", (location: any) => {
@@ -542,6 +545,10 @@ export class EpubController {
         if (cfi) {
           this.currentCfi = cfi;
           if (this.onCfiChange) this.onCfiChange(cfi);
+          try {
+            const page = this.bookObj?.locations?.locationFromCfi?.(cfi);
+            if (page != null) this.currentPage = page;
+          } catch {}
         }
         this.pageTurning = null;
       });

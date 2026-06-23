@@ -4,6 +4,8 @@
     totalSections: number;
     currentSectionIndex: number;
     canJumpBookmarks: boolean;
+    currentPage: number;
+    totalPages: number;
     onPrevBookmark: () => void;
     onNextBookmark: () => void;
   }
@@ -13,6 +15,8 @@
     totalSections,
     currentSectionIndex,
     canJumpBookmarks,
+    currentPage,
+    totalPages,
     onPrevBookmark,
     onNextBookmark,
   }: Props = $props();
@@ -48,7 +52,13 @@
         {/each}
       </div>
     {/if}
-    <span class="footer-percent">{progress}%</span>
+    {#if totalPages > 0}
+      <span class="footer-page"
+        >{currentPage} / {totalPages}</span
+      >
+    {:else}
+      <span class="footer-percent">{progress}%</span>
+    {/if}
   </div>
 </footer>
 
@@ -87,6 +97,7 @@
     cursor: pointer;
   }
 
+  .footer-page,
   .footer-percent {
     font-size: 0.7rem;
     color: var(--reader-muted, #9ca3af);
