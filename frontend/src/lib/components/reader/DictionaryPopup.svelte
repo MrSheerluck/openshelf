@@ -33,7 +33,9 @@
     error = "";
     entries = [];
     try {
-      const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`);
+      const res = await fetch(
+        `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`,
+      );
       if (res.ok) {
         const data = await res.json();
         entries = data.map((e: any) => ({
@@ -64,46 +66,48 @@
 </script>
 
 <div class="popover-overlay" onclick={onClose} role="presentation">
-<div
-  class="dict-popup"
-  style={style()}
-  onclick={(e) => e.stopPropagation()}
-  onkeydown={(e) => e.stopPropagation()}
-  role="dialog"
-  tabindex="-1"
->
-  <div class="dict-header">
-    <span class="dict-word">{word}</span>
-    {#if entries[0]?.phonetic}
-      <span class="dict-phonetic">{entries[0].phonetic}</span>
-    {/if}
-    <button class="dict-close" onclick={onClose} aria-label="Close">&times;</button>
-  </div>
+  <div
+    class="dict-popup"
+    style={style()}
+    onclick={(e) => e.stopPropagation()}
+    onkeydown={(e) => e.stopPropagation()}
+    role="dialog"
+    tabindex="-1"
+  >
+    <div class="dict-header">
+      <span class="dict-word">{word}</span>
+      {#if entries[0]?.phonetic}
+        <span class="dict-phonetic">{entries[0].phonetic}</span>
+      {/if}
+      <button class="dict-close" onclick={onClose} aria-label="Close"
+        >&times;</button
+      >
+    </div>
 
-  <div class="dict-body">
-    {#if loading}
-      <p class="dict-status">Looking up...</p>
-    {:else if error}
-      <p class="dict-status">{error}</p>
-    {:else}
-      {#each entries as entry}
-        {#each entry.meanings as meaning}
-          <div class="dict-meaning">
-            <span class="dict-pos">{meaning.partOfSpeech}</span>
-            {#each meaning.definitions as def, i}
-              <p class="dict-def">
-                <span class="dict-num">{i + 1}.</span>
-                {def.definition}
-              </p>
-              {#if def.example}
-                <p class="dict-example">"{def.example}"</p>
-              {/if}
-            {/each}
-          </div>
+    <div class="dict-body">
+      {#if loading}
+        <p class="dict-status">Looking up...</p>
+      {:else if error}
+        <p class="dict-status">{error}</p>
+      {:else}
+        {#each entries as entry}
+          {#each entry.meanings as meaning}
+            <div class="dict-meaning">
+              <span class="dict-pos">{meaning.partOfSpeech}</span>
+              {#each meaning.definitions as def, i}
+                <p class="dict-def">
+                  <span class="dict-num">{i + 1}.</span>
+                  {def.definition}
+                </p>
+                {#if def.example}
+                  <p class="dict-example">"{def.example}"</p>
+                {/if}
+              {/each}
+            </div>
+          {/each}
         {/each}
-      {/each}
-    {/if}
-  </div>
+      {/if}
+    </div>
   </div>
 </div>
 
@@ -129,8 +133,14 @@
   }
 
   @keyframes pop {
-    from { opacity: 0; transform: scale(0.95); }
-    to   { opacity: 1; transform: scale(1); }
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
   }
 
   .dict-header {

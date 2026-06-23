@@ -17,15 +17,21 @@
 
   let chapters = $derived(
     items.filter((item) => item.subitems.length === 0).length +
-    items.reduce((sum, item) => sum + item.subitems.length, 0)
+      items.reduce((sum, item) => sum + item.subitems.length, 0),
   );
 </script>
 
 <div class="toc-overlay" onclick={onClose} role="presentation">
-  <aside class="toc-panel" onclick={(e) => e.stopPropagation()} role="presentation">
+  <aside
+    class="toc-panel"
+    onclick={(e) => e.stopPropagation()}
+    role="presentation"
+  >
     <div class="toc-header">
       <h3>Contents</h3>
-      <button class="toc-close" onclick={onClose} aria-label="Close">&times;</button>
+      <button class="toc-close" onclick={onClose} aria-label="Close"
+        >&times;</button
+      >
     </div>
     <div class="toc-body">
       {#if items.length === 0}
@@ -36,7 +42,9 @@
             <li>
               <button
                 class="toc-link toc-parent"
-                class:current={currentChapter && chapterBasename(currentChapter) === chapterBasename(item.href)}
+                class:current={currentChapter &&
+                  chapterBasename(currentChapter) ===
+                    chapterBasename(item.href)}
                 onclick={() => onSelect(item.href)}
               >
                 <span class="toc-label">{item.label}</span>
@@ -47,7 +55,9 @@
                     <li>
                       <button
                         class="toc-link"
-                        class:current={currentChapter && chapterBasename(currentChapter) === chapterBasename(sub.href)}
+                        class:current={currentChapter &&
+                          chapterBasename(currentChapter) ===
+                            chapterBasename(sub.href)}
                         onclick={() => onSelect(sub.href)}
                       >
                         <span class="toc-label">{sub.label}</span>
@@ -75,8 +85,12 @@
   }
 
   @keyframes fade-in {
-    from { opacity: 0; }
-    to   { opacity: 1; }
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
   }
 
   .toc-panel {
@@ -91,8 +105,12 @@
   }
 
   @keyframes slide-in {
-    from { transform: translateX(-100%); }
-    to   { transform: translateX(0); }
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(0);
+    }
   }
 
   .toc-header {

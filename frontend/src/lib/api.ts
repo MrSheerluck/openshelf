@@ -36,8 +36,16 @@ export function uploadFile(
 
     xhr.addEventListener("load", () => {
       const headers = parseHeaders(xhr.getAllResponseHeaders());
-      const body = new Blob([xhr.response ?? ""], { type: headers.get("content-type") ?? "application/json" });
-      resolve(new Response(body, { status: xhr.status, statusText: xhr.statusText, headers }));
+      const body = new Blob([xhr.response ?? ""], {
+        type: headers.get("content-type") ?? "application/json",
+      });
+      resolve(
+        new Response(body, {
+          status: xhr.status,
+          statusText: xhr.statusText,
+          headers,
+        }),
+      );
     });
 
     xhr.addEventListener("error", () => {
@@ -73,7 +81,9 @@ export async function extractErrorMessage(res: Response): Promise<string> {
   return `HTTP ${res.status} ${res.statusText}`;
 }
 
-export async function fetchStats(): Promise<import("./reader/types").Stats | null> {
+export async function fetchStats(): Promise<
+  import("./reader/types").Stats | null
+> {
   try {
     const res = await api("/api/stats");
     if (res.ok) return await res.json();
@@ -81,7 +91,9 @@ export async function fetchStats(): Promise<import("./reader/types").Stats | nul
   return null;
 }
 
-export async function fetchTags(): Promise<import("./reader/types").TagCount[]> {
+export async function fetchTags(): Promise<
+  import("./reader/types").TagCount[]
+> {
   try {
     const res = await api("/api/tags");
     if (res.ok) return await res.json();
@@ -89,7 +101,10 @@ export async function fetchTags(): Promise<import("./reader/types").TagCount[]> 
   return [];
 }
 
-export async function setBookTags(bookId: string, tags: string[]): Promise<string[]> {
+export async function setBookTags(
+  bookId: string,
+  tags: string[],
+): Promise<string[]> {
   const res = await api(`/api/books/${bookId}/tags`, {
     method: "PUT",
     body: JSON.stringify(tags),
@@ -98,7 +113,10 @@ export async function setBookTags(bookId: string, tags: string[]): Promise<strin
   return [];
 }
 
-export async function updateBook(bookId: string, payload: Record<string, unknown>): Promise<Response> {
+export async function updateBook(
+  bookId: string,
+  payload: Record<string, unknown>,
+): Promise<Response> {
   return api(`/api/books/${bookId}`, {
     method: "PATCH",
     body: JSON.stringify(payload),
@@ -111,7 +129,9 @@ export async function touchBook(bookId: string): Promise<void> {
   } catch {}
 }
 
-export async function fetchBooks(params?: Record<string, string>): Promise<import("./reader/types").Book[]> {
+export async function fetchBooks(
+  params?: Record<string, string>,
+): Promise<import("./reader/types").Book[]> {
   const qs = params ? "?" + new URLSearchParams(params).toString() : "";
   try {
     const res = await api(`/api/books${qs}`);

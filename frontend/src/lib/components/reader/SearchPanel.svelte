@@ -10,21 +10,25 @@
     onClose: () => void;
   }
 
-  let { query, searching, results, onQueryChange, onSelect, onClose }: Props = $props();
+  let { query, searching, results, onQueryChange, onSelect, onClose }: Props =
+    $props();
 </script>
 
 <div class="panel-overlay" onclick={onClose} role="presentation">
   <aside class="panel" onclick={(e) => e.stopPropagation()} role="presentation">
     <div class="panel-header">
       <h3>Search</h3>
-      <button class="panel-close" onclick={onClose} aria-label="Close">&times;</button>
+      <button class="panel-close" onclick={onClose} aria-label="Close"
+        >&times;</button
+      >
     </div>
     <div class="search-box">
       <input
         type="search"
         placeholder="Search this book"
         value={query}
-        oninput={(e) => onQueryChange((e.currentTarget as HTMLInputElement).value)}
+        oninput={(e) =>
+          onQueryChange((e.currentTarget as HTMLInputElement).value)}
       />
     </div>
     <div class="panel-body">

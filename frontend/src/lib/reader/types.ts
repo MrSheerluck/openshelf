@@ -1,4 +1,10 @@
-export type ThemeName = "light" | "sepia" | "dark" | "cream" | "green" | "night";
+export type ThemeName =
+  | "light"
+  | "sepia"
+  | "dark"
+  | "cream"
+  | "green"
+  | "night";
 export type BookFormat = "epub" | "mobi" | string;
 export type HighlightColor = "yellow" | "green" | "blue" | "pink";
 
@@ -52,7 +58,12 @@ export interface FlattenedTocItem {
   index: number;
 }
 
-export type FontFamily = "literata" | "andika" | "shantell" | "noto" | "libertinus";
+export type FontFamily =
+  | "literata"
+  | "andika"
+  | "shantell"
+  | "noto"
+  | "libertinus";
 export type Alignment = "left" | "justify";
 
 export interface Typography {

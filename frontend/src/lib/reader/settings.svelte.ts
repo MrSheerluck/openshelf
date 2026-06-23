@@ -29,7 +29,9 @@ export class ReaderSettingsStore {
           const fam = data.font_family as Typography["fontFamily"];
           this.typography = {
             ...defaultTypography,
-            fontFamily: validFonts.has(fam) ? fam : defaultTypography.fontFamily,
+            fontFamily: validFonts.has(fam)
+              ? fam
+              : defaultTypography.fontFamily,
             fontSize: data.font_size ?? defaultTypography.fontSize,
           };
           this.saveLocal();
@@ -50,21 +52,33 @@ export class ReaderSettingsStore {
     this.saveLocal(undefined);
   }
 
-  private applySettings(s: { theme?: ThemeName; typography?: Partial<Typography> }): void {
+  private applySettings(s: {
+    theme?: ThemeName;
+    typography?: Partial<Typography>;
+  }): void {
     if (s.theme && validThemes.has(s.theme)) this.theme = s.theme;
     if (s.typography) {
       const merged = { ...defaultTypography, ...s.typography };
-      if (!validFonts.has(merged.fontFamily)) merged.fontFamily = defaultTypography.fontFamily;
+      if (!validFonts.has(merged.fontFamily))
+        merged.fontFamily = defaultTypography.fontFamily;
       this.typography = merged;
     }
   }
 
-  private loadLocal(): { cfi?: string; theme?: ThemeName; typography?: Partial<Typography> } {
+  private loadLocal(): {
+    cfi?: string;
+    theme?: ThemeName;
+    typography?: Partial<Typography>;
+  } {
     try {
       const stored = localStorage.getItem(this.key());
       if (stored) {
         const parsed = JSON.parse(stored) as Partial<ReaderSettings>;
-        return { cfi: parsed.cfi, theme: parsed.theme, typography: parsed.typography };
+        return {
+          cfi: parsed.cfi,
+          theme: parsed.theme,
+          typography: parsed.typography,
+        };
       }
     } catch {}
     return {};

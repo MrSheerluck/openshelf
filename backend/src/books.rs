@@ -447,8 +447,7 @@ const BOOK_SELECT_COLS: &str =
      b.reading_status, b.last_opened_at, b.progress, b.created_at, b.updated_at, \
      COALESCE(GROUP_CONCAT(t.name, '||'), '')";
 
-const BOOK_FROM: &str =
-    "FROM books b \
+const BOOK_FROM: &str = "FROM books b \
      LEFT JOIN book_tags bt ON bt.book_id = b.id \
      LEFT JOIN tags t ON t.id = bt.tag_id";
 
@@ -471,9 +470,7 @@ pub async fn list_books(
         _ => "DESC",
     };
 
-    let mut sql = format!(
-        "SELECT {BOOK_SELECT_COLS} {BOOK_FROM}"
-    );
+    let mut sql = format!("SELECT {BOOK_SELECT_COLS} {BOOK_FROM}");
     let mut conditions: Vec<String> = Vec::new();
     let mut param_values: Vec<String> = Vec::new();
     let mut param_idx = 1;
@@ -522,8 +519,10 @@ pub async fn list_books(
     sql.push_str(" GROUP BY b.id");
     sql.push_str(&format!(" ORDER BY {sort_field} {order_dir}"));
 
-    let param_refs: Vec<&dyn rusqlite::types::ToSql> =
-        param_values.iter().map(|v| v as &dyn rusqlite::types::ToSql).collect();
+    let param_refs: Vec<&dyn rusqlite::types::ToSql> = param_values
+        .iter()
+        .map(|v| v as &dyn rusqlite::types::ToSql)
+        .collect();
 
     let mut stmt = match db.prepare(&sql) {
         Ok(s) => s,
@@ -558,9 +557,7 @@ pub async fn get_book(
 ) -> Result<Json<Book>, StatusCode> {
     let db = state.db.lock().await;
 
-    let sql = format!(
-        "SELECT {BOOK_SELECT_COLS} {BOOK_FROM} WHERE b.id = ?1 GROUP BY b.id"
-    );
+    let sql = format!("SELECT {BOOK_SELECT_COLS} {BOOK_FROM} WHERE b.id = ?1 GROUP BY b.id");
 
     let book = db
         .query_row(&sql, params![id], book_from_row)
@@ -592,9 +589,7 @@ pub async fn update_book(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    let sql = format!(
-        "SELECT {BOOK_SELECT_COLS} {BOOK_FROM} WHERE b.id = ?1 GROUP BY b.id"
-    );
+    let sql = format!("SELECT {BOOK_SELECT_COLS} {BOOK_FROM} WHERE b.id = ?1 GROUP BY b.id");
     let book = db
         .query_row(&sql, params![id], book_from_row)
         .map_err(|_| StatusCode::NOT_FOUND)?;
@@ -1471,9 +1466,11 @@ pub async fn set_book_tags(
 
         // Get tag id
         let tag_id: String = db
-            .query_row("SELECT id FROM tags WHERE name = ?1", params![trimmed], |row| {
-                row.get(0)
-            })
+            .query_row(
+                "SELECT id FROM tags WHERE name = ?1",
+                params![trimmed],
+                |row| row.get(0),
+            )
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
         // Link book to tag
@@ -1499,9 +1496,7 @@ pub struct Stats {
     pub total_highlights: i64,
 }
 
-pub async fn get_stats(
-    State(state): State<Arc<AppState>>,
-) -> Result<Json<Stats>, StatusCode> {
+pub async fn get_stats(State(state): State<Arc<AppState>>) -> Result<Json<Stats>, StatusCode> {
     let db = state.db.lock().await;
 
     let total_books: i64 = db

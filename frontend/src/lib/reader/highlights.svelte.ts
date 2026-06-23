@@ -89,7 +89,9 @@ export class HighlightsStore {
     this.highlights = this.highlights.filter((h) => h.id !== id);
     this.saveLocal();
     try {
-      await api(`/api/books/${this.bookId}/annotations/${id}`, { method: "DELETE" });
+      await api(`/api/books/${this.bookId}/annotations/${id}`, {
+        method: "DELETE",
+      });
     } catch {}
   }
 
@@ -167,13 +169,20 @@ export class HighlightsStore {
   }
 }
 
-export const highlightColors: { value: HighlightColor; label: string; css: string }[] = [
+export const highlightColors: {
+  value: HighlightColor;
+  label: string;
+  css: string;
+}[] = [
   { value: "yellow", label: "Yellow", css: "rgba(255, 213, 79, 0.35)" },
-  { value: "green",  label: "Green",  css: "rgba(102, 187, 106, 0.35)" },
-  { value: "blue",   label: "Blue",   css: "rgba(66, 165, 245, 0.35)" },
-  { value: "pink",   label: "Pink",   css: "rgba(240, 98, 146, 0.35)" },
+  { value: "green", label: "Green", css: "rgba(102, 187, 106, 0.35)" },
+  { value: "blue", label: "Blue", css: "rgba(66, 165, 245, 0.35)" },
+  { value: "pink", label: "Pink", css: "rgba(240, 98, 146, 0.35)" },
 ];
 
 export function highlightColorCss(color: HighlightColor): string {
-  return highlightColors.find((c) => c.value === color)?.css ?? highlightColors[0].css;
+  return (
+    highlightColors.find((c) => c.value === color)?.css ??
+    highlightColors[0].css
+  );
 }

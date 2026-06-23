@@ -1,6 +1,15 @@
 <script lang="ts">
   import * as auth from "$lib/auth.svelte.ts";
-  import { api, uploadFile as apiUpload, extractErrorMessage, fetchStats, fetchTags, setBookTags, updateBook, fetchBooks } from "$lib/api";
+  import {
+    api,
+    uploadFile as apiUpload,
+    extractErrorMessage,
+    fetchStats,
+    fetchTags,
+    setBookTags,
+    updateBook,
+    fetchBooks,
+  } from "$lib/api";
   import { goto } from "$app/navigation";
   import type { Book, Stats, TagCount } from "$lib/reader/types";
 
@@ -36,17 +45,23 @@
   let continueReading = $derived(
     (currentView === "all" ? books : [])
       .filter((b) => b.last_opened_at && b.format === "epub")
-      .sort((a, b) => (b.last_opened_at ?? "").localeCompare(a.last_opened_at ?? ""))
-      .slice(0, 6)
+      .sort((a, b) =>
+        (b.last_opened_at ?? "").localeCompare(a.last_opened_at ?? ""),
+      )
+      .slice(0, 6),
   );
 
   let viewTitle = $derived.by(() => {
     if (searchQuery) return `Search: "${searchQuery}"`;
     switch (currentView) {
-      case "reading": return "Reading";
-      case "finished": return "Finished";
-      case "want_to_read": return "Want to Read";
-      default: return filterTag ? filterTag : "All Books";
+      case "reading":
+        return "Reading";
+      case "finished":
+        return "Finished";
+      case "want_to_read":
+        return "Want to Read";
+      default:
+        return filterTag ? filterTag : "All Books";
     }
   });
 
@@ -78,11 +93,16 @@
   function navCount(key: string): number {
     if (!stats) return 0;
     switch (key) {
-      case "all": return stats.total_books;
-      case "reading": return stats.reading_books;
-      case "finished": return stats.finished_books;
-      case "want_to_read": return stats.want_to_read;
-      default: return 0;
+      case "all":
+        return stats.total_books;
+      case "reading":
+        return stats.reading_books;
+      case "finished":
+        return stats.finished_books;
+      case "want_to_read":
+        return stats.want_to_read;
+      default:
+        return 0;
     }
   }
 
@@ -135,7 +155,9 @@
   });
 
   $effect(() => {
-    function closeMenu() { menuBook = null; }
+    function closeMenu() {
+      menuBook = null;
+    }
     document.addEventListener("click", closeMenu);
     return () => document.removeEventListener("click", closeMenu);
   });
@@ -214,8 +236,8 @@
         books = books.filter((b) => b.id !== deleteId);
         stats = await fetchStats();
       }
-    } catch {}
-    finally {
+    } catch {
+    } finally {
       deleting = false;
       deleteId = null;
     }
@@ -269,8 +291,26 @@
     </div>
 
     <label class="sidebar-upload">
-      <input type="file" accept=".epub,.mobi" onchange={handleFileInput} disabled={uploading} />
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      <input
+        type="file"
+        accept=".epub,.mobi"
+        onchange={handleFileInput}
+        disabled={uploading}
+      />
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        ><line x1="12" y1="5" x2="12" y2="19" /><line
+          x1="5"
+          y1="12"
+          x2="19"
+          y2="12"
+        /></svg
+      >
       {uploading ? `${uploadProgress}%` : "Upload Book"}
     </label>
     {#if uploading}
@@ -280,29 +320,80 @@
     {/if}
 
     <nav class="sidebar-nav">
-      <button class="nav-item" class:active={currentView === "all" && !searchQuery} onclick={() => setView("all")}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+      <button
+        class="nav-item"
+        class:active={currentView === "all" && !searchQuery}
+        onclick={() => setView("all")}
+      >
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          ><path d="M4 19.5A2.5 2.5 0 016.5 17H20" /><path
+            d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"
+          /></svg
+        >
         <span class="nav-label">All Books</span>
         {#if stats}
           <span class="nav-count">{stats.total_books}</span>
         {/if}
       </button>
-      <button class="nav-item" class:active={currentView === "reading"} onclick={() => setView("reading")}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+      <button
+        class="nav-item"
+        class:active={currentView === "reading"}
+        onclick={() => setView("reading")}
+      >
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          ><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></svg
+        >
         <span class="nav-label">Reading</span>
         {#if stats && stats.reading_books > 0}
           <span class="nav-count">{stats.reading_books}</span>
         {/if}
       </button>
-      <button class="nav-item" class:active={currentView === "finished"} onclick={() => setView("finished")}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="20 6 9 17 4 12"/></svg>
+      <button
+        class="nav-item"
+        class:active={currentView === "finished"}
+        onclick={() => setView("finished")}
+      >
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"><polyline points="20 6 9 17 4 12" /></svg
+        >
         <span class="nav-label">Finished</span>
         {#if stats && stats.finished_books > 0}
           <span class="nav-count">{stats.finished_books}</span>
         {/if}
       </button>
-      <button class="nav-item" class:active={currentView === "want_to_read"} onclick={() => setView("want_to_read")}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+      <button
+        class="nav-item"
+        class:active={currentView === "want_to_read"}
+        onclick={() => setView("want_to_read")}
+      >
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          ><path
+            d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
+          /></svg
+        >
         <span class="nav-label">Want to Read</span>
         {#if stats && stats.want_to_read > 0}
           <span class="nav-count">{stats.want_to_read}</span>
@@ -332,7 +423,9 @@
       {#if stats}
         <span class="sidebar-footer-stat">{stats.total_books} books</span>
         <span class="sidebar-footer-dot"></span>
-        <span class="sidebar-footer-stat">{stats.total_highlights} highlights</span>
+        <span class="sidebar-footer-stat"
+          >{stats.total_highlights} highlights</span
+        >
       {/if}
     </div>
   </aside>
@@ -345,8 +438,27 @@
       </div>
       <div class="main-header-right">
         <div class="main-search">
-          <svg class="main-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input type="search" placeholder="Search title or author..." bind:value={searchQuery} oninput={onSearchInput} />
+          <svg
+            class="main-search-icon"
+            width="15"
+            height="15"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            ><circle cx="11" cy="11" r="8" /><line
+              x1="21"
+              y1="21"
+              x2="16.65"
+              y2="16.65"
+            /></svg
+          >
+          <input
+            type="search"
+            placeholder="Search title or author..."
+            bind:value={searchQuery}
+            oninput={onSearchInput}
+          />
         </div>
         <select class="main-sort" bind:value={sortBy} onchange={onFilterChange}>
           <option value="created_at">Newest</option>
@@ -355,7 +467,13 @@
           <option value="updated_at">Recent</option>
           <option value="progress">Progress</option>
         </select>
-        <button class="main-order" onclick={() => { sortOrder = sortOrder === "desc" ? "asc" : "desc"; onFilterChange(); }}>
+        <button
+          class="main-order"
+          onclick={() => {
+            sortOrder = sortOrder === "desc" ? "asc" : "desc";
+            onFilterChange();
+          }}
+        >
           {sortOrder === "desc" ? "\u2193" : "\u2191"}
         </button>
       </div>
@@ -371,7 +489,17 @@
       <div class="empty">
         {#if currentView === "all"}
           <div class="empty-icon">
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+            <svg
+              width="40"
+              height="40"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.2"
+              ><path d="M4 19.5A2.5 2.5 0 016.5 17H20" /><path
+                d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"
+              /></svg
+            >
           </div>
           <h3>No books yet</h3>
           <p>Upload an EPUB or MOBI to get started.</p>
@@ -386,15 +514,23 @@
           <div class="continue-label">Continue Reading</div>
           <div class="continue-row">
             {#each continueReading as book (book.id)}
-              <button class="continue-card" onclick={() => goto(`/read/${book.id}`)}>
+              <button
+                class="continue-card"
+                onclick={() => goto(`/read/${book.id}`)}
+              >
                 <div class="continue-cover">
                   {#if coverUrl(book)}
                     <img src={coverUrl(book)!} alt={book.title} />
                   {:else}
-                    <span class="continue-placeholder">{book.format.toUpperCase()}</span>
+                    <span class="continue-placeholder"
+                      >{book.format.toUpperCase()}</span
+                    >
                   {/if}
                   {#if book.progress != null && book.progress > 0}
-                    <div class="continue-progress" style="width: {Math.min(book.progress, 100)}%"></div>
+                    <div
+                      class="continue-progress"
+                      style="width: {Math.min(book.progress, 100)}%"
+                    ></div>
                   {/if}
                 </div>
                 <span class="continue-title">{book.title}</span>
@@ -406,7 +542,17 @@
 
       <div class="grid">
         {#each books as book (book.id)}
-          <div class="card" role="button" tabindex="0" onclick={() => { if (!menuBook) goto(`/read/${book.id}`); }} onkeydown={(e) => { if (e.key === 'Enter') goto(`/read/${book.id}`); }}>
+          <div
+            class="card"
+            role="button"
+            tabindex="0"
+            onclick={() => {
+              if (!menuBook) goto(`/read/${book.id}`);
+            }}
+            onkeydown={(e) => {
+              if (e.key === "Enter") goto(`/read/${book.id}`);
+            }}
+          >
             <div class="card-cover">
               {#if coverUrl(book)}
                 <img src={coverUrl(book)!} alt={book.title} />
@@ -414,24 +560,93 @@
                 <div class="card-placeholder">{book.format.toUpperCase()}</div>
               {/if}
               {#if book.progress != null && book.progress > 0}
-                <div class="card-progress" style="width: {Math.min(book.progress, 100)}%"></div>
+                <div
+                  class="card-progress"
+                  style="width: {Math.min(book.progress, 100)}%"
+                ></div>
               {/if}
-              <button class="card-menu-btn" onclick={(e) => { e.stopPropagation(); menuBook = menuBook === book.id ? null : book.id; }}>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
+              <button
+                class="card-menu-btn"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  menuBook = menuBook === book.id ? null : book.id;
+                }}
+              >
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  ><circle cx="12" cy="5" r="1.5" /><circle
+                    cx="12"
+                    cy="12"
+                    r="1.5"
+                  /><circle cx="12" cy="19" r="1.5" /></svg
+                >
               </button>
               {#if menuBook === book.id}
                 <div class="card-menu" onclick={(e) => e.stopPropagation()}>
-                  <button onclick={() => { menuBook = null; openStatusEditor(book); }}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-                    {book.reading_status ? statusLabel(book.reading_status) : "Set status"}
+                  <button
+                    onclick={() => {
+                      menuBook = null;
+                      openStatusEditor(book);
+                    }}
+                  >
+                    <svg
+                      width="13"
+                      height="13"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      ><circle cx="12" cy="12" r="10" /><path
+                        d="M12 6v6l4 2"
+                      /></svg
+                    >
+                    {book.reading_status
+                      ? statusLabel(book.reading_status)
+                      : "Set status"}
                   </button>
-                  <button onclick={() => { menuBook = null; openTagEditor(book); }}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
-                    {book.tags.length ? `Tags (${book.tags.length})` : "Add tags"}
+                  <button
+                    onclick={() => {
+                      menuBook = null;
+                      openTagEditor(book);
+                    }}
+                  >
+                    <svg
+                      width="13"
+                      height="13"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      ><path
+                        d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"
+                      /><line x1="7" y1="7" x2="7.01" y2="7" /></svg
+                    >
+                    {book.tags.length
+                      ? `Tags (${book.tags.length})`
+                      : "Add tags"}
                   </button>
                   <div class="card-menu-sep"></div>
-                  <button class="menu-danger" onclick={() => { menuBook = null; deleteId = book.id; }}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                  <button
+                    class="menu-danger"
+                    onclick={() => {
+                      menuBook = null;
+                      deleteId = book.id;
+                    }}
+                  >
+                    <svg
+                      width="13"
+                      height="13"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      ><polyline points="3 6 5 6 21 6" /><path
+                        d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"
+                      /></svg
+                    >
                     Delete
                   </button>
                 </div>
@@ -441,7 +656,12 @@
               <div class="card-title-row">
                 <span class="card-title">{book.title}</span>
                 {#if book.reading_status}
-                  <span class="card-dot" class:dot-green={book.reading_status === "reading"} class:dot-blue={book.reading_status === "finished"} class:dot-amber={book.reading_status === "want_to_read"}></span>
+                  <span
+                    class="card-dot"
+                    class:dot-green={book.reading_status === "reading"}
+                    class:dot-blue={book.reading_status === "finished"}
+                    class:dot-amber={book.reading_status === "want_to_read"}
+                  ></span>
                 {/if}
               </div>
               {#if book.author}
@@ -472,7 +692,11 @@
       <p class="dialog-desc">Highlights and bookmarks will also be deleted.</p>
       <div class="dialog-actions">
         <button class="btn" onclick={() => (deleteId = null)}>Cancel</button>
-        <button class="btn btn-danger" onclick={confirmDelete} disabled={deleting}>
+        <button
+          class="btn btn-danger"
+          onclick={confirmDelete}
+          disabled={deleting}
+        >
           {deleting ? "Deleting..." : "Delete"}
         </button>
       </div>
@@ -485,20 +709,30 @@
     <div class="dialog dialog-tags" onclick={(e) => e.stopPropagation()}>
       <h3>Edit tags</h3>
       <div class="tag-input-row">
-        <input type="text" placeholder="Type and press Enter..." onkeydown={(e) => {
-          if (e.key === "Enter") {
-            const input = e.target as HTMLInputElement;
-            const val = input.value.trim();
-            if (val && !tagEditorTags.includes(val)) tagEditorTags = [...tagEditorTags, val];
-            input.value = "";
-          }
-        }} />
+        <input
+          type="text"
+          placeholder="Type and press Enter..."
+          onkeydown={(e) => {
+            if (e.key === "Enter") {
+              const input = e.target as HTMLInputElement;
+              const val = input.value.trim();
+              if (val && !tagEditorTags.includes(val))
+                tagEditorTags = [...tagEditorTags, val];
+              input.value = "";
+            }
+          }}
+        />
       </div>
       <div class="tag-chips">
         {#each tagEditorTags as tag}
           <span class="tag-chip">
             {tag}
-            <button class="tag-chip-x" onclick={() => (tagEditorTags = tagEditorTags.filter((t) => t !== tag))}>&times;</button>
+            <button
+              class="tag-chip-x"
+              onclick={() =>
+                (tagEditorTags = tagEditorTags.filter((t) => t !== tag))}
+              >&times;</button
+            >
           </span>
         {/each}
       </div>
@@ -506,7 +740,11 @@
         <div class="tag-suggest-label">All tags</div>
         <div class="tag-suggestions">
           {#each allTags as t}
-            <button class="tag-sug" class:active={tagEditorTags.includes(t.name)} onclick={() => toggleTagInEditor(t.name)}>
+            <button
+              class="tag-sug"
+              class:active={tagEditorTags.includes(t.name)}
+              onclick={() => toggleTagInEditor(t.name)}
+            >
               {t.name}
               <span class="tag-sug-count">{t.count}</span>
             </button>
@@ -514,7 +752,9 @@
         </div>
       {/if}
       <div class="dialog-actions">
-        <button class="btn" onclick={() => (tagEditorBook = null)}>Cancel</button>
+        <button class="btn" onclick={() => (tagEditorBook = null)}
+          >Cancel</button
+        >
         <button class="btn btn-primary" onclick={saveTagEditor}>Save</button>
       </div>
     </div>
@@ -526,19 +766,40 @@
     <div class="dialog" onclick={(e) => e.stopPropagation()}>
       <h3>Reading status</h3>
       <div class="status-opts">
-        <button class="status-opt" class:active={statusEditorValue === ""} onclick={() => (statusEditorValue = "")}>None</button>
-        <button class="status-opt" class:active={statusEditorValue === "reading"} class:opt-green={statusEditorValue === "reading"} onclick={() => (statusEditorValue = "reading")}>
+        <button
+          class="status-opt"
+          class:active={statusEditorValue === ""}
+          onclick={() => (statusEditorValue = "")}>None</button
+        >
+        <button
+          class="status-opt"
+          class:active={statusEditorValue === "reading"}
+          class:opt-green={statusEditorValue === "reading"}
+          onclick={() => (statusEditorValue = "reading")}
+        >
           <span class="status-dot dot-green"></span> Reading
         </button>
-        <button class="status-opt" class:active={statusEditorValue === "finished"} class:opt-blue={statusEditorValue === "finished"} onclick={() => (statusEditorValue = "finished")}>
+        <button
+          class="status-opt"
+          class:active={statusEditorValue === "finished"}
+          class:opt-blue={statusEditorValue === "finished"}
+          onclick={() => (statusEditorValue = "finished")}
+        >
           <span class="status-dot dot-blue"></span> Finished
         </button>
-        <button class="status-opt" class:active={statusEditorValue === "want_to_read"} class:opt-amber={statusEditorValue === "want_to_read"} onclick={() => (statusEditorValue = "want_to_read")}>
+        <button
+          class="status-opt"
+          class:active={statusEditorValue === "want_to_read"}
+          class:opt-amber={statusEditorValue === "want_to_read"}
+          onclick={() => (statusEditorValue = "want_to_read")}
+        >
           <span class="status-dot dot-amber"></span> Want to Read
         </button>
       </div>
       <div class="dialog-actions">
-        <button class="btn" onclick={() => (statusEditorBook = null)}>Cancel</button>
+        <button class="btn" onclick={() => (statusEditorBook = null)}
+          >Cancel</button
+        >
         <button class="btn btn-primary" onclick={saveStatusEditor}>Save</button>
       </div>
     </div>
@@ -546,10 +807,10 @@
 {/if}
 
 <style>
-  @import '@fontsource/literata/400.css';
-  @import '@fontsource/literata/500.css';
-  @import '@fontsource/literata/600.css';
-  @import '@fontsource/literata/700.css';
+  @import "@fontsource/literata/400.css";
+  @import "@fontsource/literata/500.css";
+  @import "@fontsource/literata/600.css";
+  @import "@fontsource/literata/700.css";
 
   :root {
     --sidebar: #f1f3f5;
@@ -565,18 +826,27 @@
     --bg: #f8f9fa;
     --radius: 8px;
     --radius-sm: 6px;
-    --shadow: 0 1px 3px rgba(0,0,0,0.05);
-    --shadow-hover: 0 4px 14px rgba(0,0,0,0.08);
-    --green: #16a34a; --green-bg: #f0fdf4;
-    --blue: #2563eb; --blue-bg: #eff6ff;
-    --amber: #d97706; --amber-bg: #fffbeb;
-    --danger: #dc2626; --danger-bg: #fef2f2;
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    --shadow-hover: 0 4px 14px rgba(0, 0, 0, 0.08);
+    --green: #16a34a;
+    --green-bg: #f0fdf4;
+    --blue: #2563eb;
+    --blue-bg: #eff6ff;
+    --amber: #d97706;
+    --amber-bg: #fffbeb;
+    --danger: #dc2626;
+    --danger-bg: #fef2f2;
     --font-display: "Literata", Georgia, "Times New Roman", serif;
     --font-ui: system-ui, -apple-system, sans-serif;
   }
 
-  * { box-sizing: border-box; }
-  html, body { margin: 0; }
+  * {
+    box-sizing: border-box;
+  }
+  html,
+  body {
+    margin: 0;
+  }
 
   .layout {
     display: flex;
@@ -599,9 +869,16 @@
     padding: 0;
     overflow-y: auto;
   }
-  .sidebar::-webkit-scrollbar { width: 6px; }
-  .sidebar::-webkit-scrollbar-track { background: transparent; }
-  .sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .sidebar::-webkit-scrollbar {
+    width: 6px;
+  }
+  .sidebar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .sidebar::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 3px;
+  }
   .sidebar-header {
     padding: 1rem 1rem 0.5rem;
   }
@@ -633,7 +910,9 @@
     color: var(--accent);
     background: var(--accent-bg);
   }
-  .sidebar-upload input { display: none; }
+  .sidebar-upload input {
+    display: none;
+  }
   .sidebar-upload-progress {
     height: 3px;
     margin: 0 0.75rem;
@@ -669,15 +948,28 @@
     transition: all 0.1s;
     width: 100%;
   }
-  .nav-item:hover { background: var(--sidebar-hover); color: var(--text); }
+  .nav-item:hover {
+    background: var(--sidebar-hover);
+    color: var(--text);
+  }
   .nav-item.active {
     background: var(--sidebar-active);
     color: var(--text);
     font-weight: 500;
     box-shadow: var(--shadow);
   }
-  .nav-item svg { flex-shrink: 0; }
-  .nav-label { font-family: var(--font-display); font-size: 0.84rem; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .nav-item svg {
+    flex-shrink: 0;
+  }
+  .nav-label {
+    font-family: var(--font-display);
+    font-size: 0.84rem;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .nav-count {
     font-size: 0.7rem;
     padding: 0.1rem 0.4rem;
@@ -686,7 +978,10 @@
     color: var(--text-muted);
     font-weight: 500;
   }
-  .nav-item.active .nav-count { background: var(--accent-bg); color: var(--accent); }
+  .nav-item.active .nav-count {
+    background: var(--accent-bg);
+    color: var(--accent);
+  }
 
   .sidebar-section {
     padding: 0.5rem;
@@ -706,7 +1001,9 @@
     flex-direction: column;
     gap: 1px;
   }
-  .nav-item-tag .nav-label { color: var(--text-muted); }
+  .nav-item-tag .nav-label {
+    color: var(--text-muted);
+  }
 
   .sidebar-footer {
     padding: 0.75rem 1rem;
@@ -797,8 +1094,12 @@
     outline: none;
     transition: border-color 0.12s;
   }
-  .main-search input:focus { border-color: var(--accent); }
-  .main-search input::placeholder { color: var(--text-faint); }
+  .main-search input:focus {
+    border-color: var(--accent);
+  }
+  .main-search input::placeholder {
+    color: var(--text-faint);
+  }
 
   .main-sort {
     padding: 0.4rem 0.55rem;
@@ -813,7 +1114,9 @@
     outline: none;
     line-height: 1.2;
   }
-  .main-sort:focus { border-color: var(--accent); }
+  .main-sort:focus {
+    border-color: var(--accent);
+  }
   .main-order {
     display: flex;
     align-items: center;
@@ -830,7 +1133,10 @@
     line-height: 1;
     height: 34px;
   }
-  .main-order:hover { border-color: var(--text-faint); color: var(--text); }
+  .main-order:hover {
+    border-color: var(--text-faint);
+    color: var(--text);
+  }
 
   /* ── Loading & Empty ─────────────────── */
 
@@ -848,7 +1154,7 @@
     position: relative;
   }
   .loading-bar::after {
-    content: '';
+    content: "";
     position: absolute;
     left: -40%;
     width: 40%;
@@ -858,10 +1164,18 @@
     animation: load-slide 1.2s ease-in-out infinite;
   }
   @keyframes load-slide {
-    0% { left: -40%; }
-    100% { left: 100%; }
+    0% {
+      left: -40%;
+    }
+    100% {
+      left: 100%;
+    }
   }
-  .error { padding: 1rem 1.5rem; color: var(--danger); font-size: 0.85rem; }
+  .error {
+    padding: 1rem 1.5rem;
+    color: var(--danger);
+    font-size: 0.85rem;
+  }
   .empty {
     display: flex;
     flex-direction: column;
@@ -871,9 +1185,21 @@
     color: var(--text-muted);
     text-align: center;
   }
-  .empty-icon { color: var(--text-faint); margin-bottom: 0.75rem; }
-  .empty h3 { font-family: var(--font-display); font-size: 1rem; font-weight: 500; margin: 0 0 0.25rem; color: var(--text); }
-  .empty p { font-size: 0.85rem; margin: 0; }
+  .empty-icon {
+    color: var(--text-faint);
+    margin-bottom: 0.75rem;
+  }
+  .empty h3 {
+    font-family: var(--font-display);
+    font-size: 1rem;
+    font-weight: 500;
+    margin: 0 0 0.25rem;
+    color: var(--text);
+  }
+  .empty p {
+    font-size: 0.85rem;
+    margin: 0;
+  }
 
   /* ── Continue Reading ────────────────── */
 
@@ -903,7 +1229,9 @@
     overflow: hidden;
     transition: transform 0.15s;
   }
-  .continue-card:hover { transform: translateY(-2px); }
+  .continue-card:hover {
+    transform: translateY(-2px);
+  }
   .continue-cover {
     position: relative;
     width: 100px;
@@ -913,19 +1241,41 @@
     background: var(--border);
     box-shadow: var(--shadow);
   }
-  .continue-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .continue-cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
   .continue-placeholder {
-    display: flex; align-items: center; justify-content: center; height: 100%;
-    font-size: 0.7rem; font-weight: 600; color: var(--text-faint); letter-spacing: 0.04em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-faint);
+    letter-spacing: 0.04em;
   }
   .continue-progress {
-    position: absolute; bottom: 0; left: 0; height: 3px;
-    background: var(--accent); transition: width 0.3s; border-radius: 0 2px 0 0;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 3px;
+    background: var(--accent);
+    transition: width 0.3s;
+    border-radius: 0 2px 0 0;
   }
   .continue-title {
     font-family: var(--font-display);
-    display: block; font-size: 0.76rem; font-weight: 500; color: var(--text); margin-top: 0.3rem;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    display: block;
+    font-size: 0.76rem;
+    font-weight: 500;
+    color: var(--text);
+    margin-top: 0.3rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   /* ── Grid ────────────────────────────── */
@@ -942,10 +1292,17 @@
     overflow: hidden;
     background: var(--surface);
     cursor: pointer;
-    transition: transform 0.15s, box-shadow 0.15s;
+    transition:
+      transform 0.15s,
+      box-shadow 0.15s;
   }
-  .card:hover { transform: translateY(-2px); box-shadow: var(--shadow-hover); }
-  .card:active { transform: translateY(0); }
+  .card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-hover);
+  }
+  .card:active {
+    transform: translateY(0);
+  }
 
   .card-cover {
     position: relative;
@@ -956,143 +1313,390 @@
   }
   .card-cover img {
     position: absolute;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
     object-fit: cover;
     display: block;
     transition: transform 0.25s;
   }
-  .card:hover .card-cover img { transform: scale(1.04); }
+  .card:hover .card-cover img {
+    transform: scale(1.04);
+  }
   .card-placeholder {
-    position: absolute; inset: 0;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 0.8rem; font-weight: 600; color: var(--text-faint); letter-spacing: 0.04em;
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-faint);
+    letter-spacing: 0.04em;
   }
   .card-progress {
-    position: absolute; bottom: 0; left: 0; height: 3px;
-    background: var(--accent); transition: width 0.35s; z-index: 1;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 3px;
+    background: var(--accent);
+    transition: width 0.35s;
+    z-index: 1;
   }
 
   .card-menu-btn {
-    position: absolute; top: 6px; right: 6px;
-    width: 28px; height: 28px; border-radius: 50%; border: none;
-    background: rgba(0,0,0,0.45);
-    color: rgba(255,255,255,0.85); cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(0, 0, 0, 0.45);
+    color: rgba(255, 255, 255, 0.85);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     z-index: 2;
     transition: background 0.15s;
   }
-  .card-menu-btn:hover { background: rgba(0,0,0,0.65); color: #fff; }
+  .card-menu-btn:hover {
+    background: rgba(0, 0, 0, 0.65);
+    color: #fff;
+  }
 
   .card-menu {
-    position: absolute; top: 34px; right: 5px;
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: var(--radius-sm); box-shadow: 0 8px 24px rgba(0,0,0,0.12);
-    z-index: 10; min-width: 145px; overflow: hidden; padding: 0.2rem;
+    position: absolute;
+    top: 34px;
+    right: 5px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    z-index: 10;
+    min-width: 145px;
+    overflow: hidden;
+    padding: 0.2rem;
   }
   .card-menu button {
-    display: flex; align-items: center; gap: 0.4rem;
-    width: 100%; padding: 0.4rem 0.5rem;
-    border: none; background: none; cursor: pointer;
-    font-size: 0.76rem; font-family: inherit; color: var(--text);
-    border-radius: 4px; text-align: left; transition: background 0.08s;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    width: 100%;
+    padding: 0.4rem 0.5rem;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 0.76rem;
+    font-family: inherit;
+    color: var(--text);
+    border-radius: 4px;
+    text-align: left;
+    transition: background 0.08s;
   }
-  .card-menu button:hover { background: var(--bg); }
-  .card-menu button svg { flex-shrink: 0; color: var(--text-muted); }
-  .card-menu-sep { height: 1px; background: var(--border); margin: 0.15rem 0.3rem; }
-  .card-menu .menu-danger { color: var(--danger); }
-  .card-menu .menu-danger:hover { background: var(--danger-bg); }
+  .card-menu button:hover {
+    background: var(--bg);
+  }
+  .card-menu button svg {
+    flex-shrink: 0;
+    color: var(--text-muted);
+  }
+  .card-menu-sep {
+    height: 1px;
+    background: var(--border);
+    margin: 0.15rem 0.3rem;
+  }
+  .card-menu .menu-danger {
+    color: var(--danger);
+  }
+  .card-menu .menu-danger:hover {
+    background: var(--danger-bg);
+  }
 
-  .card-body { padding: 0.45rem 0.5rem 0.5rem; }
-  .card-title-row { display: flex; align-items: center; gap: 0.3rem; }
-  .card-title { font-family: var(--font-display); font-size: 0.82rem; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-  .card-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
-  .dot-green { background: var(--green); }
-  .dot-blue { background: var(--blue); }
-  .dot-amber { background: var(--amber); }
-  .card-author { display: block; font-size: 0.72rem; color: var(--text-muted); margin-top: 0.1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .card-tags { display: flex; gap: 0.2rem; align-items: center; margin-top: 0.2rem; overflow: hidden; }
-  .card-tag { font-size: 0.62rem; padding: 0.05rem 0.25rem; border-radius: 3px; background: var(--bg); color: var(--text-faint); border: 1px solid var(--border); white-space: nowrap; }
-  .card-tag-more { font-size: 0.62rem; color: var(--text-faint); }
+  .card-body {
+    padding: 0.45rem 0.5rem 0.5rem;
+  }
+  .card-title-row {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+  }
+  .card-title {
+    font-family: var(--font-display);
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+  .card-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .dot-green {
+    background: var(--green);
+  }
+  .dot-blue {
+    background: var(--blue);
+  }
+  .dot-amber {
+    background: var(--amber);
+  }
+  .card-author {
+    display: block;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    margin-top: 0.1rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .card-tags {
+    display: flex;
+    gap: 0.2rem;
+    align-items: center;
+    margin-top: 0.2rem;
+    overflow: hidden;
+  }
+  .card-tag {
+    font-size: 0.62rem;
+    padding: 0.05rem 0.25rem;
+    border-radius: 3px;
+    background: var(--bg);
+    color: var(--text-faint);
+    border: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  .card-tag-more {
+    font-size: 0.62rem;
+    color: var(--text-faint);
+  }
 
   /* ── Overlay & Dialogs ───────────────── */
 
   .overlay {
-    position: fixed; inset: 0;
-    background: rgba(0,0,0,0.35);
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.35);
     backdrop-filter: blur(2px);
-    display: flex; align-items: center; justify-content: center;
-    z-index: 100; padding: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    padding: 1rem;
   }
   .dialog {
-    background: var(--surface); border-radius: 10px; padding: 1.25rem;
-    min-width: 280px; max-width: 380px; width: 100%;
-    box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+    background: var(--surface);
+    border-radius: 10px;
+    padding: 1.25rem;
+    min-width: 280px;
+    max-width: 380px;
+    width: 100%;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
   }
-  .dialog h3 { font-family: var(--font-display); font-size: 1rem; font-weight: 600; margin: 0 0 0.35rem; color: var(--text); letter-spacing: -0.01em; }
-  .dialog-desc { font-family: var(--font-display); font-size: 0.85rem; font-weight: 450; color: var(--text-muted); margin: 0 0 1rem; line-height: 1.4; }
-  .dialog-actions { display: flex; gap: 0.4rem; justify-content: flex-end; margin-top: 1rem; }
+  .dialog h3 {
+    font-family: var(--font-display);
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0 0 0.35rem;
+    color: var(--text);
+    letter-spacing: -0.01em;
+  }
+  .dialog-desc {
+    font-family: var(--font-display);
+    font-size: 0.85rem;
+    font-weight: 450;
+    color: var(--text-muted);
+    margin: 0 0 1rem;
+    line-height: 1.4;
+  }
+  .dialog-actions {
+    display: flex;
+    gap: 0.4rem;
+    justify-content: flex-end;
+    margin-top: 1rem;
+  }
   .btn {
-    padding: 0.35rem 0.85rem; border: 1px solid var(--border); border-radius: var(--radius-sm);
-    background: var(--surface); cursor: pointer;
-    font-family: var(--font-display); font-size: 0.82rem; font-weight: 500;
-    color: var(--text-muted); transition: all 0.1s;
+    padding: 0.35rem 0.85rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    cursor: pointer;
+    font-family: var(--font-display);
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    transition: all 0.1s;
   }
-  .btn:hover { border-color: var(--text-faint); color: var(--text); }
+  .btn:hover {
+    border-color: var(--text-faint);
+    color: var(--text);
+  }
   .btn-primary {
-    border-color: var(--accent); background: var(--accent); color: #fff; font-weight: 600;
+    border-color: var(--accent);
+    background: var(--accent);
+    color: #fff;
+    font-weight: 600;
   }
-  .btn-primary:hover { opacity: 0.9; }
-  .btn-danger { border-color: var(--danger); background: var(--danger); color: #fff; }
-  .btn-danger:disabled { opacity: 0.5; }
+  .btn-primary:hover {
+    opacity: 0.9;
+  }
+  .btn-danger {
+    border-color: var(--danger);
+    background: var(--danger);
+    color: #fff;
+  }
+  .btn-danger:disabled {
+    opacity: 0.5;
+  }
 
   /* Tag editor */
-  .dialog-tags { text-align: left; }
-  .tag-input-row { margin-bottom: 0.5rem; }
+  .dialog-tags {
+    text-align: left;
+  }
+  .tag-input-row {
+    margin-bottom: 0.5rem;
+  }
   .tag-input-row input {
-    width: 100%; padding: 0.35rem 0.55rem;
-    border: 1px solid var(--border); border-radius: var(--radius-sm);
-    font-size: 0.82rem; font-family: inherit; background: var(--bg);
-    color: var(--text); outline: none;
+    width: 100%;
+    padding: 0.35rem 0.55rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 0.82rem;
+    font-family: inherit;
+    background: var(--bg);
+    color: var(--text);
+    outline: none;
   }
-  .tag-input-row input:focus { border-color: var(--accent); }
-  .tag-chips { display: flex; gap: 0.3rem; flex-wrap: wrap; margin-bottom: 0.65rem; min-height: 1.5rem; }
+  .tag-input-row input:focus {
+    border-color: var(--accent);
+  }
+  .tag-chips {
+    display: flex;
+    gap: 0.3rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.65rem;
+    min-height: 1.5rem;
+  }
   .tag-chip {
-    display: inline-flex; align-items: center; gap: 0.25rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
     font-family: var(--font-display);
-    font-size: 0.8rem; font-weight: 500;
-    padding: 0.15rem 0.5rem; border-radius: 5px;
-    background: var(--accent-bg); color: var(--accent); border: 1px solid #dbeafe;
+    font-size: 0.8rem;
+    font-weight: 500;
+    padding: 0.15rem 0.5rem;
+    border-radius: 5px;
+    background: var(--accent-bg);
+    color: var(--accent);
+    border: 1px solid #dbeafe;
   }
-  .tag-chip-x { background: none; border: none; cursor: pointer; color: var(--accent); font-size: 1rem; padding: 0; line-height: 1; opacity: 0.6; }
-  .tag-chip-x:hover { opacity: 1; }
-  .tag-suggest-label { font-family: var(--font-display); font-size: 0.75rem; font-weight: 500; color: var(--text-muted); margin-bottom: 0.3rem; }
-  .tag-suggestions { display: flex; gap: 0.3rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+  .tag-chip-x {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--accent);
+    font-size: 1rem;
+    padding: 0;
+    line-height: 1;
+    opacity: 0.6;
+  }
+  .tag-chip-x:hover {
+    opacity: 1;
+  }
+  .tag-suggest-label {
+    font-family: var(--font-display);
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    margin-bottom: 0.3rem;
+  }
+  .tag-suggestions {
+    display: flex;
+    gap: 0.3rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.5rem;
+  }
   .tag-sug {
-    display: inline-flex; align-items: center; gap: 0.3rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
     font-family: var(--font-display);
-    font-size: 0.78rem; font-weight: 500;
-    padding: 0.18rem 0.55rem; border-radius: 5px;
-    border: 1px solid var(--border); background: var(--surface);
-    cursor: pointer; color: var(--text-muted); transition: all 0.08s;
+    font-size: 0.78rem;
+    font-weight: 500;
+    padding: 0.18rem 0.55rem;
+    border-radius: 5px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: all 0.08s;
   }
-  .tag-sug:hover { border-color: var(--accent); color: var(--accent); }
-  .tag-sug.active { background: var(--accent-bg); border-color: var(--accent); color: var(--accent); }
-  .tag-sug-count { font-family: var(--font-ui); font-size: 0.65rem; font-weight: 400; color: var(--text-faint); }
+  .tag-sug:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .tag-sug.active {
+    background: var(--accent-bg);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .tag-sug-count {
+    font-family: var(--font-ui);
+    font-size: 0.65rem;
+    font-weight: 400;
+    color: var(--text-faint);
+  }
 
   /* Status editor */
-  .status-opts { display: flex; flex-direction: column; gap: 0.3rem; }
-  .status-opt {
-    display: flex; align-items: center; gap: 0.45rem;
-    padding: 0.5rem 0.65rem; border: 1px solid var(--border); border-radius: var(--radius-sm);
-    background: var(--surface); cursor: pointer;
-    font-family: var(--font-display); font-size: 0.85rem; font-weight: 500;
-    color: var(--text); text-align: left; transition: all 0.1s;
+  .status-opts {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
   }
-  .status-opt:hover { border-color: var(--text-faint); }
-  .status-opt.active { border-width: 1.5px; }
-  .opt-green.active { border-color: var(--green); background: var(--green-bg); }
-  .opt-blue.active { border-color: var(--blue); background: var(--blue-bg); }
-  .opt-amber.active { border-color: var(--amber); background: var(--amber-bg); }
-  .status-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .status-opt {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.5rem 0.65rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    cursor: pointer;
+    font-family: var(--font-display);
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text);
+    text-align: left;
+    transition: all 0.1s;
+  }
+  .status-opt:hover {
+    border-color: var(--text-faint);
+  }
+  .status-opt.active {
+    border-width: 1.5px;
+  }
+  .opt-green.active {
+    border-color: var(--green);
+    background: var(--green-bg);
+  }
+  .opt-blue.active {
+    border-color: var(--blue);
+    background: var(--blue-bg);
+  }
+  .opt-amber.active {
+    border-color: var(--amber);
+    background: var(--amber-bg);
+  }
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
 </style>

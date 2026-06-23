@@ -8,15 +8,30 @@
     onNextBookmark: () => void;
   }
 
-  let { progress, totalSections, currentSectionIndex, canJumpBookmarks, onPrevBookmark, onNextBookmark }: Props = $props();
+  let {
+    progress,
+    totalSections,
+    currentSectionIndex,
+    canJumpBookmarks,
+    onPrevBookmark,
+    onNextBookmark,
+  }: Props = $props();
 </script>
 
 <footer class="reader-footer">
   <div class="footer-content">
     {#if canJumpBookmarks}
       <div class="bookmark-jumps">
-        <button class="jump-btn" onclick={onPrevBookmark} aria-label="Previous bookmark">Prev bookmark</button>
-        <button class="jump-btn" onclick={onNextBookmark} aria-label="Next bookmark">Next bookmark</button>
+        <button
+          class="jump-btn"
+          onclick={onPrevBookmark}
+          aria-label="Previous bookmark">Prev bookmark</button
+        >
+        <button
+          class="jump-btn"
+          onclick={onNextBookmark}
+          aria-label="Next bookmark">Next bookmark</button
+        >
       </div>
     {/if}
     {#if totalSections > 0}
@@ -24,7 +39,11 @@
         {#each { length: Math.min(totalSections, 40) } as _, i}
           <span
             class="section-dot"
-            class:active={i <= Math.round((currentSectionIndex / (totalSections - 1)) * (Math.min(totalSections, 40) - 1))}
+            class:active={i <=
+              Math.round(
+                (currentSectionIndex / (totalSections - 1)) *
+                  (Math.min(totalSections, 40) - 1),
+              )}
           ></span>
         {/each}
       </div>
@@ -36,7 +55,11 @@
 <style>
   .reader-footer {
     padding: 0.4rem 1rem 0.5rem;
-    background: linear-gradient(to top, var(--reader-bg, #fff) 60%, transparent);
+    background: linear-gradient(
+      to top,
+      var(--reader-bg, #fff) 60%,
+      transparent
+    );
     user-select: none;
     -webkit-user-select: none;
   }
