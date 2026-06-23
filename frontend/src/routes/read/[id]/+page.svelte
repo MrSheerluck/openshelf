@@ -7,7 +7,7 @@
 <script lang="ts">
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
-  import { api } from "$lib/api";
+  import { api, touchBook } from "$lib/api";
   import type {
     Book,
     ThemeName,
@@ -69,12 +69,12 @@
     return `${API_URL}/api/books/${id}/file`;
   }
 
-  async function saveProgress(cfi: string) {
+  async function saveProgress(cfi: string, pct?: number) {
     if (!cfi) return;
     try {
       await api(`/api/books/${id}/progress`, {
         method: "POST",
-        body: JSON.stringify({ cfi }),
+        body: JSON.stringify({ cfi, progress: pct }),
       });
     } catch {}
   }
@@ -89,6 +89,7 @@
         if (!res.ok) { error = "Book not found"; return null; }
         const data: Book = await res.json();
         book = data;
+        touchBook(bookId);
         return data;
       })
       .catch(() => { error = "Failed to load book"; return null; });
@@ -187,7 +188,7 @@
       });
       c.onProgress((cfi) => {
         localSettings.save({ cfi });
-        saveProgress(cfi);
+        saveProgress(cfi, c.progress);
       });
       c.onSelect((cfiRange, text, rect) => {
         selection = { cfiRange, text, x: rect.left + rect.width / 2, y: rect.top };

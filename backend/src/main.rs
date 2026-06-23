@@ -69,7 +69,9 @@ async fn main() {
         .route("/books", get(books::list_books).post(books::upload_book))
         .route(
             "/books/{id}",
-            get(books::get_book).delete(books::delete_book),
+            get(books::get_book)
+                .delete(books::delete_book)
+                .patch(books::update_book),
         )
         .route("/books/{id}/file", get(books::serve_book_file))
         .route("/books/{id}/cover", get(books::serve_book_cover))
@@ -80,6 +82,10 @@ async fn main() {
         .route(
             "/books/{id}/progress",
             axum::routing::post(books::save_progress),
+        )
+        .route(
+            "/books/{id}/touch",
+            axum::routing::post(books::touch_book),
         )
         .route(
             "/books/{id}/annotations",
@@ -106,6 +112,9 @@ async fn main() {
             "/books/{id}/settings",
             get(books::get_settings).put(books::save_settings),
         )
+        .route("/books/{id}/tags", get(books::list_book_tags).put(books::set_book_tags))
+        .route("/tags", get(books::list_all_tags))
+        .route("/stats", get(books::get_stats))
         .route_layer(middleware::from_fn(auth::require_auth));
 
     let api_routes = Router::new().merge(public).merge(protected);
@@ -116,7 +125,7 @@ async fn main() {
     let cors = CorsLayer::new()
         .allow_origin(AllowOrigin::exact(frontend_url.parse().unwrap()))
         .allow_credentials(true)
-        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
+        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::PATCH, Method::DELETE])
         .allow_headers([axum::http::header::CONTENT_TYPE]);
 
     let app = Router::new()

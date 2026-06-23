@@ -72,3 +72,50 @@ export async function extractErrorMessage(res: Response): Promise<string> {
   } catch {}
   return `HTTP ${res.status} ${res.statusText}`;
 }
+
+export async function fetchStats(): Promise<import("./reader/types").Stats | null> {
+  try {
+    const res = await api("/api/stats");
+    if (res.ok) return await res.json();
+  } catch {}
+  return null;
+}
+
+export async function fetchTags(): Promise<import("./reader/types").TagCount[]> {
+  try {
+    const res = await api("/api/tags");
+    if (res.ok) return await res.json();
+  } catch {}
+  return [];
+}
+
+export async function setBookTags(bookId: string, tags: string[]): Promise<string[]> {
+  const res = await api(`/api/books/${bookId}/tags`, {
+    method: "PUT",
+    body: JSON.stringify(tags),
+  });
+  if (res.ok) return await res.json();
+  return [];
+}
+
+export async function updateBook(bookId: string, payload: Record<string, unknown>): Promise<Response> {
+  return api(`/api/books/${bookId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function touchBook(bookId: string): Promise<void> {
+  try {
+    await api(`/api/books/${bookId}/touch`, { method: "POST" });
+  } catch {}
+}
+
+export async function fetchBooks(params?: Record<string, string>): Promise<import("./reader/types").Book[]> {
+  const qs = params ? "?" + new URLSearchParams(params).toString() : "";
+  try {
+    const res = await api(`/api/books${qs}`);
+    if (res.ok) return await res.json();
+  } catch {}
+  return [];
+}
