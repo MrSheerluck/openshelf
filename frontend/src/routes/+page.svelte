@@ -377,6 +377,7 @@
     {:else}
       {#if continueReading.length > 0}
         <section class="continue-section">
+          <div class="continue-label">Continue Reading</div>
           <div class="continue-row">
             {#each continueReading as book (book.id)}
               <button class="continue-card" onclick={() => goto(`/read/${book.id}`)}>
@@ -539,26 +540,33 @@
 {/if}
 
 <style>
+  @import '@fontsource/literata/400.css';
+  @import '@fontsource/literata/500.css';
+  @import '@fontsource/literata/600.css';
+  @import '@fontsource/literata/700.css';
+
   :root {
-    --sidebar: #f0f1f3;
-    --sidebar-hover: #e5e7eb;
+    --sidebar: #f1f3f5;
+    --sidebar-hover: #e8eaed;
     --sidebar-active: #fff;
-    --accent: #2563eb;
-    --accent-bg: #eff6ff;
-    --text: #1a1a1a;
+    --accent: #1a56db;
+    --accent-bg: #eef2ff;
+    --text: #16181a;
     --text-muted: #6b7280;
     --text-faint: #9ca3af;
-    --border: #e5e7eb;
+    --border: #e2e4e8;
     --surface: #fff;
-    --bg: #fafafa;
+    --bg: #f8f9fa;
     --radius: 8px;
     --radius-sm: 6px;
-    --shadow: 0 1px 3px rgba(0,0,0,0.06);
-    --shadow-hover: 0 4px 12px rgba(0,0,0,0.08);
+    --shadow: 0 1px 3px rgba(0,0,0,0.05);
+    --shadow-hover: 0 4px 14px rgba(0,0,0,0.08);
     --green: #16a34a; --green-bg: #f0fdf4;
     --blue: #2563eb; --blue-bg: #eff6ff;
     --amber: #d97706; --amber-bg: #fffbeb;
     --danger: #dc2626; --danger-bg: #fef2f2;
+    --font-display: "Literata", Georgia, "Times New Roman", serif;
+    --font-ui: system-ui, -apple-system, sans-serif;
   }
 
   * { box-sizing: border-box; }
@@ -567,7 +575,8 @@
   .layout {
     display: flex;
     height: 100vh;
-    font-family: system-ui, -apple-system, sans-serif;
+    font-family: var(--font-ui);
+    -webkit-font-smoothing: antialiased;
     background: var(--bg);
     color: var(--text);
   }
@@ -584,14 +593,19 @@
     padding: 0;
     overflow-y: auto;
   }
+  .sidebar::-webkit-scrollbar { width: 6px; }
+  .sidebar::-webkit-scrollbar-track { background: transparent; }
+  .sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
   .sidebar-header {
     padding: 1rem 1rem 0.5rem;
   }
   .sidebar-logo {
-    font-size: 1.05rem;
-    font-weight: 650;
+    font-family: var(--font-display);
+    font-size: 1.15rem;
+    font-weight: 700;
     margin: 0;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.01em;
+    color: var(--text);
   }
   .sidebar-upload {
     display: flex;
@@ -655,7 +669,7 @@
     box-shadow: var(--shadow);
   }
   .nav-item svg { flex-shrink: 0; }
-  .nav-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .nav-label { font-family: var(--font-display); font-size: 0.84rem; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .nav-count {
     font-size: 0.7rem;
     padding: 0.1rem 0.4rem;
@@ -729,12 +743,14 @@
     min-width: 0;
   }
   .main-title {
-    font-size: 1rem;
+    font-family: var(--font-display);
+    font-size: 1.1rem;
     font-weight: 600;
     margin: 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    letter-spacing: -0.01em;
   }
   .main-count {
     font-size: 0.78rem;
@@ -840,13 +856,21 @@
     text-align: center;
   }
   .empty-icon { color: var(--text-faint); margin-bottom: 0.75rem; }
-  .empty h3 { font-size: 1rem; font-weight: 500; margin: 0 0 0.25rem; color: var(--text); }
+  .empty h3 { font-family: var(--font-display); font-size: 1rem; font-weight: 500; margin: 0 0 0.25rem; color: var(--text); }
   .empty p { font-size: 0.85rem; margin: 0; }
 
   /* ── Continue Reading ────────────────── */
 
   .continue-section {
     padding: 1rem 1.5rem 0.5rem;
+  }
+  .continue-label {
+    font-family: var(--font-display);
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 0.5rem;
+    letter-spacing: -0.01em;
   }
   .continue-row {
     display: flex;
@@ -883,7 +907,8 @@
     background: var(--accent); transition: width 0.3s; border-radius: 0 2px 0 0;
   }
   .continue-title {
-    display: block; font-size: 0.74rem; color: var(--text-muted); margin-top: 0.3rem;
+    font-family: var(--font-display);
+    display: block; font-size: 0.76rem; font-weight: 500; color: var(--text); margin-top: 0.3rem;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
 
@@ -965,7 +990,7 @@
 
   .card-body { padding: 0.45rem 0.5rem 0.5rem; }
   .card-title-row { display: flex; align-items: center; gap: 0.3rem; }
-  .card-title { font-size: 0.8rem; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .card-title { font-family: var(--font-display); font-size: 0.82rem; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   .card-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
   .dot-green { background: var(--green); }
   .dot-blue { background: var(--blue); }
@@ -989,7 +1014,7 @@
     min-width: 280px; max-width: 380px; width: 100%;
     box-shadow: 0 8px 30px rgba(0,0,0,0.15);
   }
-  .dialog h3 { font-size: 0.95rem; font-weight: 600; margin: 0 0 0.35rem; color: var(--text); }
+  .dialog h3 { font-family: var(--font-display); font-size: 1rem; font-weight: 600; margin: 0 0 0.35rem; color: var(--text); letter-spacing: -0.01em; }
   .dialog-desc { font-size: 0.82rem; color: var(--text-muted); margin: 0 0 1rem; line-height: 1.4; }
   .dialog-actions { display: flex; gap: 0.4rem; justify-content: flex-end; margin-top: 1rem; }
   .btn {
