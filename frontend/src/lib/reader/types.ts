@@ -1,5 +1,5 @@
 export type ThemeName = "light" | "sepia" | "dark" | "cream" | "green" | "night";
-export type BookFormat = "epub" | "pdf" | "mobi" | string;
+export type BookFormat = "epub" | "mobi" | string;
 export type HighlightColor = "yellow" | "green" | "blue" | "pink";
 
 export interface Theme {
@@ -63,6 +63,12 @@ export interface Bookmark {
   chapterLabel: string | null;
   cfi: string;
   createdAt: number;
+}
+
+export interface SpineItem {
+  href: string;
+  id: string;
+  media_type: string;
 }
 
 export interface SearchResult {

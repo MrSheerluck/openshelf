@@ -78,8 +78,7 @@ Highlights from [ROADMAP.md](../ROADMAP.md):
 - **v0.2: Core EPUB Reading**: full metadata extraction (title/author/ISBN from OPF), per-chapter content serving, cover image extraction (already shipped), paginated reader with themes, typography controls, library grid, drag-and-drop upload.
 - **v0.3: Reading Features**: server-side bookmark/annotation CRUD (UI exists; some endpoints are already shipped), FTS5 search, tag management, preference sync across devices.
 - **v0.4: Polish**: Apple Books-inspired UI, keyboard shortcuts, table of contents panel, offline reading via Service Worker, bulk import/export.
-- **v1.0: PDF support**: upload, render via pdf.js, same paginated experience.
-- **v1.1: MOBI**: Kindle format support via `mobi` crate.
+- **v1.0: MOBI**: Kindle format support via `mobi` crate.
 - **v1.2: CBZ/CBR**: comic book support, page-by-page image rendering, right-to-left manga mode.
 - **v2.0: Future**: audiobooks, reading stats, collections/series, OPDS feed, multi-user, TTS, dictionary lookup.
 

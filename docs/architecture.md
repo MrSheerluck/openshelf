@@ -37,7 +37,7 @@ frontend/src/
 ├── lib/
 │   ├── api.ts              # fetch() wrapper with credentials: include
 │   ├── auth.svelte.ts      # Auth state ($state rune), login/logout
-│   ├── pdf.ts              # pdf.js worker setup
+
 │   └── reader/
 │       ├── epub.svelte.ts        # epub.js controller: pagination, themes, CFI
 │       ├── bookmarks.svelte.ts   # Bookmark CRUD + UI state
@@ -110,8 +110,8 @@ books (
   isbn TEXT,
   language TEXT,
   cover_path TEXT,              -- S3 key for cover image
-  file_path TEXT NOT NULL,      -- S3 key for the EPUB/PDF
-  format TEXT NOT NULL DEFAULT 'epub',  -- epub, pdf, mobi, cbz
+  file_path TEXT NOT NULL,      -- S3 key for the EPUB file
+  format TEXT NOT NULL DEFAULT 'epub',  -- epub, mobi, cbz
   file_size INTEGER,            -- bytes
   page_count INTEGER,           -- total pages
   current_page TEXT,            -- last reading CFI (TEXT, not INTEGER, to hold CFIs)

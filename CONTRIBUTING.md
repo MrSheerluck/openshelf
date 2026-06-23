@@ -70,7 +70,7 @@ openshelf/
 │       ├── lib/
 │       │   ├── api.ts              # fetch() wrapper with credentials
 │       │   ├── auth.svelte.ts      # Auth state, signin/signup/logout
-│       │   ├── pdf.ts              # PDF.js worker setup
+
 │       │   └── reader/
 │       │       ├── epub.svelte.ts        # epub.js controller
 │       │       ├── bookmarks.svelte.ts   # Bookmark state

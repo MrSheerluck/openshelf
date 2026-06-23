@@ -17,7 +17,7 @@ OpenShelf is a self-hosted ebook reader web app. Fast, simple, private. Your lib
 
 | Layer | Technology |
 |-------|-----------|
-| Frontend | SvelteKit + TypeScript + epub.js + pdf.js |
+| Frontend | SvelteKit + TypeScript + epub.js |
 | Backend | Rust (Axum) + SQLite (rusqlite) |
 | Database | SQLite (bundled) |
 | Auth | argon2 password hash, JWT in httpOnly cookie |

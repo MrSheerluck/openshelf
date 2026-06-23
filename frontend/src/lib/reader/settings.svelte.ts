@@ -15,11 +15,11 @@ export class ReaderSettingsStore {
     this.bookId = bookId;
   }
 
-  async load(): Promise<{ cfi?: string }> {
-    if (this.loaded) return {};
+  async load(initialCfi?: string | null): Promise<void> {
+    if (this.loaded) return;
     this.loaded = true;
     const local = this.loadLocal();
-    if (local.cfi) this.applySettings(local);
+    if (local.cfi && !initialCfi) this.applySettings(local);
     try {
       const res = await api(`/api/books/${this.bookId}/settings`);
       if (res.ok) {
@@ -36,17 +36,9 @@ export class ReaderSettingsStore {
         }
       }
     } catch {}
-    try {
-      const res = await api(`/api/books/${this.bookId}`);
-      if (res.ok) {
-        const book = await res.json();
-        if (book.current_page) {
-          this.saveLocal(book.current_page);
-          return { cfi: book.current_page };
-        }
-      }
-    } catch {}
-    return { cfi: local.cfi };
+    if (initialCfi) {
+      this.saveLocal(initialCfi);
+    }
   }
 
   save(extra?: { cfi?: string }): void {
