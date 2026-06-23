@@ -7,7 +7,7 @@
 <script lang="ts">
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
-  import { api } from "$lib/api";
+  import { api, touchBook } from "$lib/api";
   import type {
     Book,
     ThemeName,
@@ -56,10 +56,19 @@
   let firstChapterHref = $state<string | null>(null);
   let viewerEl = $state<HTMLDivElement | null>(null);
 
-  type Selection = { cfiRange: string; text: string; x: number; y: number } | null;
+  type Selection = {
+    cfiRange: string;
+    text: string;
+    x: number;
+    y: number;
+  } | null;
   let selection = $state<Selection>(null);
   let dictWord = $state<{ word: string; x: number; y: number } | null>(null);
-  let noteEditor = $state<{ highlight: Highlight; x: number; y: number } | null>(null);
+  let noteEditor = $state<{
+    highlight: Highlight;
+    x: number;
+    y: number;
+  } | null>(null);
   let searchQuery = $state("");
   let searchResults = $state<SearchResult[]>([]);
   let searching = $state(false);
@@ -69,12 +78,12 @@
     return `${API_URL}/api/books/${id}/file`;
   }
 
-  async function saveProgress(cfi: string) {
+  async function saveProgress(cfi: string, pct?: number) {
     if (!cfi) return;
     try {
       await api(`/api/books/${id}/progress`, {
         method: "POST",
-        body: JSON.stringify({ cfi }),
+        body: JSON.stringify({ cfi, progress: pct }),
       });
     } catch {}
   }
@@ -86,12 +95,19 @@
     // 1. Fire everything in parallel
     const bookPromise = api(`/api/books/${bookId}`)
       .then(async (res) => {
-        if (!res.ok) { error = "Book not found"; return null; }
+        if (!res.ok) {
+          error = "Book not found";
+          return null;
+        }
         const data: Book = await res.json();
         book = data;
+        touchBook(bookId);
         return data;
       })
-      .catch(() => { error = "Failed to load book"; return null; });
+      .catch(() => {
+        error = "Failed to load book";
+        return null;
+      });
 
     const blobPromise = (async () => {
       const cached = __blobCache.get(bookId);
@@ -107,7 +123,9 @@
         __blobCache.set(bookId, url);
         fileBlobUrl = url;
         return url;
-      } catch { return null; }
+      } catch {
+        return null;
+      }
     })();
 
     const spinePromise = api(`/api/books/${bookId}/spine`)
@@ -134,7 +152,10 @@
     // at the exact saved position — no visual jump.
     const initialCfiPromise = bookPromise.then(async (bookData) => {
       if (bookData) localBookmarks.load();
-      if (!bookData || bookData.format !== "epub") { loading = false; return null; }
+      if (!bookData || bookData.format !== "epub") {
+        loading = false;
+        return null;
+      }
 
       const savedCfi = (bookData as any).current_page ?? null;
       if (savedCfi) {
@@ -147,7 +168,10 @@
       // New reader: show first chapter preview while blob loads
       const spineData = await spinePromise;
       const first = spineData?.[0];
-      if (!first) { loading = false; return null; }
+      if (!first) {
+        loading = false;
+        return null;
+      }
       try {
         const res = await api(`/api/books/${bookId}/resource/${first.href}`);
         if (res.ok) {
@@ -155,7 +179,9 @@
           firstChapterHref = first.href;
           loading = false;
         }
-      } catch { loading = false; }
+      } catch {
+        loading = false;
+      }
       return null;
     });
 
@@ -167,7 +193,7 @@
         return;
       }
       // Only EPUB uses the epubjs controller
-      const format = (await bookPromise as any)?.format;
+      const format = ((await bookPromise) as any)?.format;
       if (format !== "epub") return;
       loading = false;
 
@@ -187,21 +213,31 @@
       });
       c.onProgress((cfi) => {
         localSettings.save({ cfi });
-        saveProgress(cfi);
+        saveProgress(cfi, c.progress);
       });
       c.onSelect((cfiRange, text, rect) => {
-        selection = { cfiRange, text, x: rect.left + rect.width / 2, y: rect.top };
+        selection = {
+          cfiRange,
+          text,
+          x: rect.left + rect.width / 2,
+          y: rect.top,
+        };
       });
       c.onHighlightClick((cfiRange) => {
         if (!localHighlights) return;
         const h = localHighlights.findByCfi(cfiRange);
         if (h) {
-          let x = window.innerWidth / 2, y = window.innerHeight / 2;
+          let x = window.innerWidth / 2,
+            y = window.innerHeight / 2;
           try {
-            const ann = c.rendition?.annotations?._annotations?.[encodeURI(cfiRange + "highlight")];
+            const ann =
+              c.rendition?.annotations?._annotations?.[
+                encodeURI(cfiRange + "highlight")
+              ];
             if (ann?.mark?.element) {
               const r = ann.mark.element.getBoundingClientRect();
-              x = r.left + r.width / 2; y = r.top;
+              x = r.left + r.width / 2;
+              y = r.top;
             }
           } catch {}
           noteEditor = { highlight: h, x, y };
@@ -209,7 +245,10 @@
       });
       c.onContentClick(() => {
         handleActivity();
-        if (selection) { selection = null; c.clearSelection(); }
+        if (selection) {
+          selection = null;
+          c.clearSelection();
+        }
         if (dictWord) dictWord = null;
         if (noteEditor) noteEditor = null;
       });
@@ -219,7 +258,10 @@
       });
       controller = c;
       await c.mount(el);
-      if (c.error) { error = c.error; return; }
+      if (c.error) {
+        error = c.error;
+        return;
+      }
       if (c.restoreFailed) localSettings.clearCfi();
 
       // Fetch highlights (from backend, or localStorage) then render them
@@ -233,16 +275,25 @@
 
     // Cleanup on unmount — keep the blob URL in cache for instant re-open
     return () => {
-      if (controller) { controller.destroy(); controller = null; }
+      if (controller) {
+        controller.destroy();
+        controller = null;
+      }
     };
   });
 
   // Helper: wait until the epub-viewer DOM element appears
   function waitForViewerEl(): Promise<HTMLDivElement> {
     return new Promise((resolve) => {
-      if (viewerEl) { resolve(viewerEl); return; }
+      if (viewerEl) {
+        resolve(viewerEl);
+        return;
+      }
       const check = setInterval(() => {
-        if (viewerEl) { clearInterval(check); resolve(viewerEl); }
+        if (viewerEl) {
+          clearInterval(check);
+          resolve(viewerEl);
+        }
       }, 30);
     });
   }
@@ -346,13 +397,26 @@
   }
 
   function jumpBookmark(direction: 1 | -1) {
-    if (!controller?.currentCfi || !bookmarksStore || bookmarksStore.bookmarks.length === 0) return;
-    const sorted = [...bookmarksStore.bookmarks].sort((a, b) => a.chapterIndex - b.chapterIndex || a.createdAt - b.createdAt);
-    const currentIndex = sorted.findIndex((bookmark) => bookmark.cfi === controller?.currentCfi);
-    const anchorIndex = currentIndex >= 0 ? currentIndex : (direction > 0 ? -1 : 0);
-    const nextIndex = direction > 0
-      ? (anchorIndex + 1) % sorted.length
-      : (anchorIndex <= 0 ? sorted.length - 1 : anchorIndex - 1);
+    if (
+      !controller?.currentCfi ||
+      !bookmarksStore ||
+      bookmarksStore.bookmarks.length === 0
+    )
+      return;
+    const sorted = [...bookmarksStore.bookmarks].sort(
+      (a, b) => a.chapterIndex - b.chapterIndex || a.createdAt - b.createdAt,
+    );
+    const currentIndex = sorted.findIndex(
+      (bookmark) => bookmark.cfi === controller?.currentCfi,
+    );
+    const anchorIndex =
+      currentIndex >= 0 ? currentIndex : direction > 0 ? -1 : 0;
+    const nextIndex =
+      direction > 0
+        ? (anchorIndex + 1) % sorted.length
+        : anchorIndex <= 0
+          ? sorted.length - 1
+          : anchorIndex - 1;
     controller.display(sorted[nextIndex].cfi);
   }
 
@@ -370,7 +434,10 @@
   function syncHighlightChapterLabels() {
     if (!controller || !highlightsStore) return;
     for (const highlight of highlightsStore.highlights) {
-      const label = controller.resolveChapterLabel(highlight.chapterIndex, highlight.cfiRange);
+      const label = controller.resolveChapterLabel(
+        highlight.chapterIndex,
+        highlight.cfiRange,
+      );
       highlightsStore.setChapterLabel(highlight.id, label);
     }
   }
@@ -413,7 +480,10 @@
     }
 
     if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
-      if (selection) { selection = null; controller?.clearSelection(); }
+      if (selection) {
+        selection = null;
+        controller?.clearSelection();
+      }
       if (dictWord) dictWord = null;
       if (noteEditor) noteEditor = null;
       if (e.key === "ArrowLeft") prevPage();
@@ -422,9 +492,19 @@
     }
 
     if (e.key === "Escape") {
-      if (noteEditor) { noteEditor = null; return; }
-      if (dictWord) { dictWord = null; return; }
-      if (selection) { selection = null; controller?.clearSelection(); return; }
+      if (noteEditor) {
+        noteEditor = null;
+        return;
+      }
+      if (dictWord) {
+        dictWord = null;
+        return;
+      }
+      if (selection) {
+        selection = null;
+        controller?.clearSelection();
+        return;
+      }
       goto("/");
       return;
     }
@@ -463,7 +543,13 @@
   }
 
   $effect(() => {
-    if (showToc || showTypography || showHighlights || showBookmarks || showSearch) {
+    if (
+      showToc ||
+      showTypography ||
+      showHighlights ||
+      showBookmarks ||
+      showSearch
+    ) {
       if (idleTimer) {
         clearTimeout(idleTimer);
         idleTimer = null;
@@ -516,7 +602,11 @@
   onkeydown={handleKeydown}
   onpointermove={handleActivity}
   ontouchstart={handleActivity}
-  onclick={() => { if (selection) closeSelection(); if (dictWord) dictWord = null; if (noteEditor) noteEditor = null; }}
+  onclick={() => {
+    if (selection) closeSelection();
+    if (dictWord) dictWord = null;
+    if (noteEditor) noteEditor = null;
+  }}
 />
 
 <div
@@ -527,11 +617,17 @@
   class:green={book?.format === "epub" && settings?.theme === "green"}
   class:night={book?.format === "epub" && settings?.theme === "night"}
 >
-  <div class="reader-header-wrap" class:hidden={book?.format === "epub" && !showControls}>
+  <div
+    class="reader-header-wrap"
+    class:hidden={book?.format === "epub" && !showControls}
+  >
     <ReaderHeader
       title={book?.title ?? "Loading..."}
       showTocButton={book?.format === "epub"}
-      isBookmarked={!!(controller?.currentCfi && bookmarksStore?.findByCfi(controller.currentCfi))}
+      isBookmarked={!!(
+        controller?.currentCfi &&
+        bookmarksStore?.findByCfi(controller.currentCfi)
+      )}
       onBack={goBack}
       onToggleSearch={() => (showSearch = !showSearch)}
       onToggleBookmarks={() => (showBookmarks = !showBookmarks)}
@@ -663,7 +759,9 @@
     font-family: system-ui, sans-serif;
     background: var(--reader-bg, #fff);
     color: var(--reader-fg, #1a1a1a);
-    transition: background 0.2s, color 0.2s;
+    transition:
+      background 0.2s,
+      color 0.2s;
     --reader-bg: #ffffff;
     --reader-fg: #1a1a1a;
     --reader-border: rgba(0, 0, 0, 0.1);
@@ -726,7 +824,9 @@
   .reader-header-wrap {
     position: relative;
     z-index: 10;
-    transition: opacity 0.25s, transform 0.25s;
+    transition:
+      opacity 0.25s,
+      transform 0.25s;
   }
   .reader-header-wrap.hidden {
     opacity: 0;
@@ -740,7 +840,9 @@
     left: 0;
     right: 0;
     z-index: 4;
-    transition: opacity 0.25s, transform 0.25s;
+    transition:
+      opacity 0.25s,
+      transform 0.25s;
   }
   .reader-footer-wrap.hidden {
     opacity: 0;

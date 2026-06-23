@@ -31,7 +31,11 @@ export class BookmarksStore {
     return this.bookmarks.find((bookmark) => bookmark.cfi === cfi);
   }
 
-  async add(cfi: string, chapterIndex: number, chapterLabel: string | null): Promise<Bookmark | null> {
+  async add(
+    cfi: string,
+    chapterIndex: number,
+    chapterLabel: string | null,
+  ): Promise<Bookmark | null> {
     try {
       const res = await api(`/api/books/${this.bookId}/bookmarks`, {
         method: "POST",
@@ -62,7 +66,9 @@ export class BookmarksStore {
   async remove(id: string): Promise<void> {
     this.bookmarks = this.bookmarks.filter((bookmark) => bookmark.id !== id);
     try {
-      await api(`/api/books/${this.bookId}/bookmarks/${id}`, { method: "DELETE" });
+      await api(`/api/books/${this.bookId}/bookmarks/${id}`, {
+        method: "DELETE",
+      });
     } catch {}
   }
 }

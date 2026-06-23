@@ -11,14 +11,8 @@
     onClose: () => void;
   }
 
-  let {
-    typography,
-    theme,
-    progress,
-    onChange,
-    onSetTheme,
-    onClose,
-  }: Props = $props();
+  let { typography, theme, progress, onChange, onSetTheme, onClose }: Props =
+    $props();
 
   function setFontFamily(family: FontFamily) {
     onChange({ ...typography, fontFamily: family });
@@ -38,7 +32,11 @@
 </script>
 
 <div class="typo-overlay" onclick={onClose} role="presentation">
-  <div class="typo-panel" onclick={(e) => e.stopPropagation()} role="presentation">
+  <div
+    class="typo-panel"
+    onclick={(e) => e.stopPropagation()}
+    role="presentation"
+  >
     <div class="typo-handle" aria-hidden="true"></div>
 
     <section class="typo-section">
@@ -65,7 +63,11 @@
         <span class="typo-value">{typography.fontSize}%</span>
       </div>
       <div class="size-row">
-        <button class="size-btn" onclick={() => setFontSize(typography.fontSize - 10)} aria-label="Decrease">A-</button>
+        <button
+          class="size-btn"
+          onclick={() => setFontSize(typography.fontSize - 10)}
+          aria-label="Decrease">A-</button
+        >
         <div class="size-presets">
           {#each [80, 100, 120, 140, 160, 180, 200] as preset}
             <button
@@ -76,7 +78,11 @@
             ></button>
           {/each}
         </div>
-        <button class="size-btn" onclick={() => setFontSize(typography.fontSize + 10)} aria-label="Increase">A+</button>
+        <button
+          class="size-btn"
+          onclick={() => setFontSize(typography.fontSize + 10)}
+          aria-label="Increase">A+</button
+        >
       </div>
     </section>
 
@@ -92,7 +98,10 @@
             onclick={() => onSetTheme(t.name)}
             title={t.label}
           >
-            <span class="theme-dot" style="background: {t.bg}; border-color: {dotBorder(t.bg)};"></span>
+            <span
+              class="theme-dot"
+              style="background: {t.bg}; border-color: {dotBorder(t.bg)};"
+            ></span>
             <span class="theme-label">{t.label}</span>
           </button>
         {/each}
@@ -137,8 +146,12 @@
   }
 
   @keyframes slide-up {
-    from { transform: translateY(100%); }
-    to   { transform: translateY(0); }
+    from {
+      transform: translateY(100%);
+    }
+    to {
+      transform: translateY(0);
+    }
   }
 
   .typo-handle {
@@ -192,7 +205,9 @@
     cursor: pointer;
     color: var(--reader-panel-fg, #1a1a1a);
     font-size: 0.9rem;
-    transition: border-color 0.15s, color 0.15s;
+    transition:
+      border-color 0.15s,
+      color 0.15s;
     text-align: center;
   }
   .font-family-btn:hover {
@@ -242,15 +257,39 @@
     background: none;
     padding: 0;
     cursor: pointer;
-    transition: background 0.15s, border-color 0.15s, transform 0.15s;
+    transition:
+      background 0.15s,
+      border-color 0.15s,
+      transform 0.15s;
   }
-  .preset-dot:nth-child(1) { width: 6px; height: 6px; }
-  .preset-dot:nth-child(2) { width: 7px; height: 7px; }
-  .preset-dot:nth-child(3) { width: 8px; height: 8px; }
-  .preset-dot:nth-child(4) { width: 10px; height: 10px; }
-  .preset-dot:nth-child(5) { width: 12px; height: 12px; }
-  .preset-dot:nth-child(6) { width: 14px; height: 14px; }
-  .preset-dot:nth-child(7) { width: 16px; height: 16px; }
+  .preset-dot:nth-child(1) {
+    width: 6px;
+    height: 6px;
+  }
+  .preset-dot:nth-child(2) {
+    width: 7px;
+    height: 7px;
+  }
+  .preset-dot:nth-child(3) {
+    width: 8px;
+    height: 8px;
+  }
+  .preset-dot:nth-child(4) {
+    width: 10px;
+    height: 10px;
+  }
+  .preset-dot:nth-child(5) {
+    width: 12px;
+    height: 12px;
+  }
+  .preset-dot:nth-child(6) {
+    width: 14px;
+    height: 14px;
+  }
+  .preset-dot:nth-child(7) {
+    width: 16px;
+    height: 16px;
+  }
 
   .preset-dot.active {
     background: #4f46e5;

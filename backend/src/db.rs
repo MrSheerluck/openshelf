@@ -24,6 +24,9 @@ pub fn run_migrations(conn: &Connection) {
             file_size INTEGER,
             page_count INTEGER,
             current_page TEXT,
+            reading_status TEXT,
+            last_opened_at TEXT,
+            progress REAL DEFAULT 0.0,
             created_at TEXT DEFAULT (datetime('now')),
             updated_at TEXT DEFAULT (datetime('now'))
         );
@@ -85,6 +88,26 @@ pub fn run_migrations(conn: &Connection) {
         ) {
             Ok(_) => eprintln!("[migrate] conversion complete"),
             Err(e) => eprintln!("[migrate] conversion failed: {e}"),
+        }
+    }
+
+    // Add new columns if they don't exist (for existing databases)
+    for (col, def) in [
+        ("reading_status", "TEXT"),
+        ("last_opened_at", "TEXT"),
+        ("progress", "REAL DEFAULT 0.0"),
+    ] {
+        let exists: bool = conn
+            .query_row(
+                "SELECT COUNT(*) > 0 FROM pragma_table_info('books') WHERE name = ?1",
+                rusqlite::params![col],
+                |row| row.get(0),
+            )
+            .unwrap_or(false);
+        if !exists {
+            eprintln!("[migrate] adding column books.{col}");
+            conn.execute_batch(&format!("ALTER TABLE books ADD COLUMN {col} {def};"))
+                .unwrap_or_else(|e| eprintln!("[migrate] failed to add {col}: {e}"));
         }
     }
 }

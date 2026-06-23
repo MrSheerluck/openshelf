@@ -15,19 +15,39 @@
   <aside class="panel" onclick={(e) => e.stopPropagation()} role="presentation">
     <div class="panel-header">
       <h3>Bookmarks</h3>
-      <button class="panel-close" onclick={onClose} aria-label="Close">&times;</button>
+      <button class="panel-close" onclick={onClose} aria-label="Close"
+        >&times;</button
+      >
     </div>
     <div class="panel-body">
       {#if bookmarks.length === 0}
-        <p class="empty">No bookmarks yet. Use the flag button to save your place.</p>
+        <p class="empty">
+          No bookmarks yet. Use the flag button to save your place.
+        </p>
       {:else}
         {#each bookmarks as bookmark (bookmark.id)}
-          <div class="item" role="button" tabindex="0" onclick={() => onSelect(bookmark.cfi)} onkeydown={(e) => e.key === "Enter" && onSelect(bookmark.cfi)}>
+          <div
+            class="item"
+            role="button"
+            tabindex="0"
+            onclick={() => onSelect(bookmark.cfi)}
+            onkeydown={(e) => e.key === "Enter" && onSelect(bookmark.cfi)}
+          >
             <div class="item-copy">
-              <p class="item-title">{bookmark.chapterLabel ?? `Chapter ${bookmark.chapterIndex + 1}`}</p>
+              <p class="item-title">
+                {bookmark.chapterLabel ??
+                  `Chapter ${bookmark.chapterIndex + 1}`}
+              </p>
               <p class="item-meta">Saved spot</p>
             </div>
-            <button class="item-delete" onclick={(e) => { e.stopPropagation(); onDelete(bookmark.id); }} aria-label="Delete bookmark">&times;</button>
+            <button
+              class="item-delete"
+              onclick={(e) => {
+                e.stopPropagation();
+                onDelete(bookmark.id);
+              }}
+              aria-label="Delete bookmark">&times;</button
+            >
           </div>
         {/each}
       {/if}

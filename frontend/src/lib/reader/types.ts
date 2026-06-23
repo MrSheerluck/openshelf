@@ -1,4 +1,10 @@
-export type ThemeName = "light" | "sepia" | "dark" | "cream" | "green" | "night";
+export type ThemeName =
+  | "light"
+  | "sepia"
+  | "dark"
+  | "cream"
+  | "green"
+  | "night";
 export type BookFormat = "epub" | "mobi" | string;
 export type HighlightColor = "yellow" | "green" | "blue" | "pink";
 
@@ -15,6 +21,29 @@ export interface Book {
   title: string;
   author: string | null;
   format: BookFormat;
+  cover_path: string | null;
+  file_size: number | null;
+  page_count: number | null;
+  current_page: string | null;
+  reading_status: string | null;
+  last_opened_at: string | null;
+  progress: number | null;
+  tags: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TagCount {
+  name: string;
+  count: number;
+}
+
+export interface Stats {
+  total_books: number;
+  finished_books: number;
+  reading_books: number;
+  want_to_read: number;
+  total_highlights: number;
 }
 
 export interface TocItem {
@@ -29,7 +58,12 @@ export interface FlattenedTocItem {
   index: number;
 }
 
-export type FontFamily = "literata" | "andika" | "shantell" | "noto" | "libertinus";
+export type FontFamily =
+  | "literata"
+  | "andika"
+  | "shantell"
+  | "noto"
+  | "libertinus";
 export type Alignment = "left" | "justify";
 
 export interface Typography {

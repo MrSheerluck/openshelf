@@ -13,11 +13,14 @@ const STYLESHEET_KEY = "openshelf-reader";
 const PAGE_TURN_TIMEOUT = 2000;
 const NAVIGATION_TIMEOUT = 4000;
 
-const HIGHLIGHT_FILLS: Record<HighlightColor, { fill: string; "fill-opacity": string }> = {
-  yellow: { fill: "rgb(255, 213, 79)",   "fill-opacity": "0.35" },
-  green:  { fill: "rgb(102, 187, 106)",  "fill-opacity": "0.35" },
-  blue:   { fill: "rgb(66, 165, 245)",   "fill-opacity": "0.35" },
-  pink:   { fill: "rgb(240, 98, 146)",   "fill-opacity": "0.35" },
+const HIGHLIGHT_FILLS: Record<
+  HighlightColor,
+  { fill: string; "fill-opacity": string }
+> = {
+  yellow: { fill: "rgb(255, 213, 79)", "fill-opacity": "0.35" },
+  green: { fill: "rgb(102, 187, 106)", "fill-opacity": "0.35" },
+  blue: { fill: "rgb(66, 165, 245)", "fill-opacity": "0.35" },
+  pink: { fill: "rgb(240, 98, 146)", "fill-opacity": "0.35" },
 };
 
 function chapterBasename(href: string): string {
@@ -235,7 +238,7 @@ export function buildReaderCss(
       background: ${t.bg};
       color: ${t.fg};
       font-family: ${fam};
-      font-size: ${(typography.fontSize / 100 * 16).toFixed(1)}px;
+      font-size: ${((typography.fontSize / 100) * 16).toFixed(1)}px;
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
       text-rendering: optimizeLegibility;
@@ -421,7 +424,9 @@ export class EpubController {
   private options: EpubControllerOptions;
   private mounted = false;
   private onCfiChange: ((cfi: string) => void) | null = null;
-  private onSelectCb: ((cfiRange: string, text: string, rect: DOMRect) => void) | null = null;
+  private onSelectCb:
+    | ((cfiRange: string, text: string, rect: DOMRect) => void)
+    | null = null;
   private onHighlightClickCb: ((cfiRange: string) => void) | null = null;
   private onContentClickCb: (() => void) | null = null;
   private onKeydownCb: ((e: KeyboardEvent) => void) | null = null;
@@ -463,7 +468,9 @@ export class EpubController {
         requestMethod: async (url: string) => {
           const res = await fetch(url, { credentials: "include" });
           if (!res.ok) {
-            throw new Error(`Failed to fetch book: ${res.status} ${res.statusText}`);
+            throw new Error(
+              `Failed to fetch book: ${res.status} ${res.statusText}`,
+            );
           }
           return await res.arrayBuffer();
         },
@@ -555,7 +562,9 @@ export class EpubController {
       });
 
       const SWIPE_THRESHOLD = 50;
-      let downX = 0, downY = 0, isDown = false;
+      let downX = 0,
+        downY = 0,
+        isDown = false;
 
       this.rendition.on("mousedown", (e: any) => {
         downX = e.clientX ?? 0;
@@ -586,42 +595,52 @@ export class EpubController {
         }
       });
 
-      this.rendition.on("touchstart", (e: any) => {
-        const t = e.touches?.[0];
-        downX = t?.clientX ?? 0;
-        downY = t?.clientY ?? 0;
-        isDown = true;
+      this.rendition.on(
+        "touchstart",
+        (e: any) => {
+          const t = e.touches?.[0];
+          downX = t?.clientX ?? 0;
+          downY = t?.clientY ?? 0;
+          isDown = true;
 
-        try {
-          const contentsList = this.rendition?.getContents();
-          if (contentsList) {
-            for (const content of contentsList) {
-              const sel = content.window?.getSelection();
-              if (sel) sel.removeAllRanges();
+          try {
+            const contentsList = this.rendition?.getContents();
+            if (contentsList) {
+              for (const content of contentsList) {
+                const sel = content.window?.getSelection();
+                if (sel) sel.removeAllRanges();
+              }
             }
-          }
-        } catch {}
-        if (this.onContentClickCb) this.onContentClickCb();
-      }, { passive: true });
+          } catch {}
+          if (this.onContentClickCb) this.onContentClickCb();
+        },
+        { passive: true },
+      );
 
-      this.rendition.on("touchend", (e: any) => {
-        if (!isDown) return;
-        isDown = false;
-        if (this.hasActiveSelection()) return;
-        const t = e.changedTouches?.[0];
-        if (!t) return;
-        const dx = t.clientX - downX;
-        const dy = t.clientY - downY;
-        if (Math.abs(dx) > SWIPE_THRESHOLD && Math.abs(dx) > Math.abs(dy) * 2) {
-          if (dx < 0) this.next();
-          else this.prev();
-        }
-      }, { passive: true });
+      this.rendition.on(
+        "touchend",
+        (e: any) => {
+          if (!isDown) return;
+          isDown = false;
+          if (this.hasActiveSelection()) return;
+          const t = e.changedTouches?.[0];
+          if (!t) return;
+          const dx = t.clientX - downX;
+          const dy = t.clientY - downY;
+          if (
+            Math.abs(dx) > SWIPE_THRESHOLD &&
+            Math.abs(dx) > Math.abs(dy) * 2
+          ) {
+            if (dx < 0) this.next();
+            else this.prev();
+          }
+        },
+        { passive: true },
+      );
 
       this.rendition.on("keydown", (e: any) => {
         if (this.onKeydownCb) this.onKeydownCb(e as KeyboardEvent);
       });
-
     } catch (e) {
       console.error("EPUB render error:", e);
       this.error = `Failed to render book: ${e instanceof Error ? e.message : String(e)}`;
@@ -661,13 +680,21 @@ export class EpubController {
   }
 
   currentChapterLabel(): string | null {
-    return this.resolveChapterLabel(this.currentSectionIndex, this.currentChapter);
+    return this.resolveChapterLabel(
+      this.currentSectionIndex,
+      this.currentChapter,
+    );
   }
 
-  resolveChapterLabel(chapterIndex: number, href?: string | null): string | null {
+  resolveChapterLabel(
+    chapterIndex: number,
+    href?: string | null,
+  ): string | null {
     const normalizedHref = href ? chapterBasename(href) : "";
     if (normalizedHref) {
-      const hrefMatch = this.flatToc.find((item) => chapterBasename(item.href) === normalizedHref);
+      const hrefMatch = this.flatToc.find(
+        (item) => chapterBasename(item.href) === normalizedHref,
+      );
       if (hrefMatch?.label) return hrefMatch.label;
     }
     const indexMatch = this.flatToc.find((item) => item.index === chapterIndex);
@@ -697,7 +724,8 @@ export class EpubController {
         results.push({
           id: `${index}-${href}`,
           chapterIndex: index,
-          chapterLabel: this.resolveChapterLabel(index, href) ?? `Chapter ${index + 1}`,
+          chapterLabel:
+            this.resolveChapterLabel(index, href) ?? `Chapter ${index + 1}`,
           excerpt: buildExcerpt(text, trimmed),
           href,
         });
@@ -771,7 +799,11 @@ export class EpubController {
       const contentsList = this.rendition.getContents();
       for (const contents of contentsList) {
         const selection = contents.window?.getSelection();
-        if (selection && !selection.isCollapsed && selection.toString().trim()) {
+        if (
+          selection &&
+          !selection.isCollapsed &&
+          selection.toString().trim()
+        ) {
           return true;
         }
       }
@@ -801,13 +833,11 @@ export class EpubController {
 
     const sectionHref: string | undefined = section?.href;
     const baseHref = sectionHref
-      ? `/api/books/${this.options.bookId}/resource/${
-          (() => {
-            const cleanHref = sectionHref.split("#")[0] ?? sectionHref;
-            const dir = cleanHref.split("/").slice(0, -1).join("/");
-            return dir ? dir + "/" : "";
-          })()
-        }`
+      ? `/api/books/${this.options.bookId}/resource/${(() => {
+          const cleanHref = sectionHref.split("#")[0] ?? sectionHref;
+          const dir = cleanHref.split("/").slice(0, -1).join("/");
+          return dir ? dir + "/" : "";
+        })()}`
       : `/api/books/${this.options.bookId}/resource/`;
 
     // Override whatever base href epubjs's own `replaceBase` set. We tag

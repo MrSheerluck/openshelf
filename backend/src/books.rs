@@ -15,7 +15,7 @@ use uuid::Uuid;
 use crate::storage::Storage;
 use crate::AppState;
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Book {
     pub id: String,
     pub title: String,
@@ -30,8 +30,30 @@ pub struct Book {
     pub file_size: Option<i64>,
     pub page_count: Option<i32>,
     pub current_page: Option<String>,
+    pub reading_status: Option<String>,
+    pub last_opened_at: Option<String>,
+    pub progress: Option<f64>,
+    #[serde(default)]
+    pub tags: Vec<String>,
     pub created_at: String,
     pub updated_at: String,
+}
+
+#[derive(Deserialize)]
+pub struct BookQuery {
+    pub search: Option<String>,
+    pub status: Option<String>,
+    pub format: Option<String>,
+    pub tag: Option<String>,
+    pub sort: Option<String>,
+    pub order: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct UpdateBookPayload {
+    pub title: Option<String>,
+    pub author: Option<String>,
+    pub reading_status: Option<String>,
 }
 
 fn storage(state: &AppState) -> Result<&Storage, (StatusCode, Json<serde_json::Value>)> {
@@ -389,14 +411,120 @@ pub async fn upload_book(
     Ok((StatusCode::CREATED, Json(serde_json::json!({ "id": id }))))
 }
 
-pub async fn list_books(State(state): State<Arc<AppState>>) -> Result<Json<Vec<Book>>, StatusCode> {
+fn book_from_row(row: &rusqlite::Row) -> rusqlite::Result<Book> {
+    let tags_str: String = row.get(18)?;
+    let tags: Vec<String> = if tags_str.is_empty() {
+        Vec::new()
+    } else {
+        tags_str.split("||").map(|s| s.to_string()).collect()
+    };
+    Ok(Book {
+        id: row.get(0)?,
+        title: row.get(1)?,
+        author: row.get(2)?,
+        description: row.get(3)?,
+        publisher: row.get(4)?,
+        isbn: row.get(5)?,
+        language: row.get(6)?,
+        cover_path: row.get(7)?,
+        file_path: row.get(8)?,
+        format: row.get(9)?,
+        file_size: row.get(10)?,
+        page_count: row.get(11)?,
+        current_page: row.get(12)?,
+        reading_status: row.get(13)?,
+        last_opened_at: row.get(14)?,
+        progress: row.get(15)?,
+        created_at: row.get(16)?,
+        updated_at: row.get(17)?,
+        tags,
+    })
+}
+
+const BOOK_SELECT_COLS: &str =
+    "b.id, b.title, b.author, b.description, b.publisher, b.isbn, b.language, \
+     b.cover_path, b.file_path, b.format, b.file_size, b.page_count, b.current_page, \
+     b.reading_status, b.last_opened_at, b.progress, b.created_at, b.updated_at, \
+     COALESCE(GROUP_CONCAT(t.name, '||'), '')";
+
+const BOOK_FROM: &str = "FROM books b \
+     LEFT JOIN book_tags bt ON bt.book_id = b.id \
+     LEFT JOIN tags t ON t.id = bt.tag_id";
+
+pub async fn list_books(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<BookQuery>,
+) -> Result<Json<Vec<Book>>, StatusCode> {
     let db = state.db.lock().await;
 
-    let mut stmt = match db.prepare(
-        "SELECT id, title, author, description, publisher, isbn, language, cover_path, \
-         file_path, format, file_size, page_count, current_page, created_at, updated_at \
-         FROM books ORDER BY created_at DESC",
-    ) {
+    let sort_field = match query.sort.as_deref() {
+        Some("title") => "b.title",
+        Some("author") => "b.author",
+        Some("created_at") => "b.created_at",
+        Some("updated_at") => "b.updated_at",
+        Some("progress") => "b.progress",
+        _ => "b.created_at",
+    };
+    let order_dir = match query.order.as_deref() {
+        Some("asc") | Some("ASC") => "ASC",
+        _ => "DESC",
+    };
+
+    let mut sql = format!("SELECT {BOOK_SELECT_COLS} {BOOK_FROM}");
+    let mut conditions: Vec<String> = Vec::new();
+    let mut param_values: Vec<String> = Vec::new();
+    let mut param_idx = 1;
+
+    if let Some(ref search) = query.search {
+        let s = format!("%{}%", search);
+        conditions.push(format!(
+            "(b.title LIKE ?{p} OR b.author LIKE ?{p})",
+            p = param_idx
+        ));
+        param_values.push(s);
+        param_idx += 1;
+    }
+
+    if let Some(ref status) = query.status {
+        if !status.is_empty() {
+            conditions.push(format!("b.reading_status = ?{p}", p = param_idx));
+            param_values.push(status.clone());
+            param_idx += 1;
+        }
+    }
+
+    if let Some(ref fmt) = query.format {
+        if !fmt.is_empty() {
+            conditions.push(format!("b.format = ?{p}", p = param_idx));
+            param_values.push(fmt.clone());
+            param_idx += 1;
+        }
+    }
+
+    if let Some(ref tag) = query.tag {
+        if !tag.is_empty() {
+            conditions.push(format!(
+                "b.id IN (SELECT bt2.book_id FROM book_tags bt2 JOIN tags t2 ON t2.id = bt2.tag_id WHERE t2.name = ?{p})",
+                p = param_idx
+            ));
+            param_values.push(tag.clone());
+        }
+    }
+
+    if !conditions.is_empty() {
+        sql.push_str(" WHERE ");
+        sql.push_str(&conditions.join(" AND "));
+    }
+
+    sql.push_str(" GROUP BY b.id");
+    sql.push_str(&format!(" ORDER BY {sort_field} {order_dir}"));
+
+    let param_refs: Vec<&dyn rusqlite::types::ToSql> = param_values
+        .iter()
+        .map(|v| v as &dyn rusqlite::types::ToSql)
+        .collect();
+
+    let mut stmt = match db.prepare(&sql) {
         Ok(s) => s,
         Err(e) => {
             eprintln!("[list_books] prepare error: {e}");
@@ -404,25 +532,7 @@ pub async fn list_books(State(state): State<Arc<AppState>>) -> Result<Json<Vec<B
         }
     };
 
-    let rows = match stmt.query_map([], |row| {
-        Ok(Book {
-            id: row.get(0)?,
-            title: row.get(1)?,
-            author: row.get(2)?,
-            description: row.get(3)?,
-            publisher: row.get(4)?,
-            isbn: row.get(5)?,
-            language: row.get(6)?,
-            cover_path: row.get(7)?,
-            file_path: row.get(8)?,
-            format: row.get(9)?,
-            file_size: row.get(10)?,
-            page_count: row.get(11)?,
-            current_page: row.get(12)?,
-            created_at: row.get(13)?,
-            updated_at: row.get(14)?,
-        })
-    }) {
+    let rows = match stmt.query_map(param_refs.as_slice(), book_from_row) {
         Ok(r) => r,
         Err(e) => {
             eprintln!("[list_books] query error: {e}");
@@ -447,35 +557,56 @@ pub async fn get_book(
 ) -> Result<Json<Book>, StatusCode> {
     let db = state.db.lock().await;
 
+    let sql = format!("SELECT {BOOK_SELECT_COLS} {BOOK_FROM} WHERE b.id = ?1 GROUP BY b.id");
+
     let book = db
-        .query_row(
-            "SELECT id, title, author, description, publisher, isbn, language, cover_path, \
-             file_path, format, file_size, page_count, current_page, created_at, updated_at \
-             FROM books WHERE id = ?1",
-            params![id],
-            |row| {
-                Ok(Book {
-                    id: row.get(0)?,
-                    title: row.get(1)?,
-                    author: row.get(2)?,
-                    description: row.get(3)?,
-                    publisher: row.get(4)?,
-                    isbn: row.get(5)?,
-                    language: row.get(6)?,
-                    cover_path: row.get(7)?,
-                    file_path: row.get(8)?,
-                    format: row.get(9)?,
-                    file_size: row.get(10)?,
-                    page_count: row.get(11)?,
-                    current_page: row.get(12)?,
-                    created_at: row.get(13)?,
-                    updated_at: row.get(14)?,
-                })
-            },
-        )
+        .query_row(&sql, params![id], book_from_row)
         .map_err(|_| StatusCode::NOT_FOUND)?;
 
     Ok(Json(book))
+}
+
+pub async fn update_book(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Json(body): Json<UpdateBookPayload>,
+) -> Result<Json<Book>, StatusCode> {
+    let db = state.db.lock().await;
+    // When reading_status is Some("") it means "clear the status".
+    // When None it means "don't change".
+    // CASE: if param IS NULL → keep existing; if param = '' → set to NULL; else set to param.
+    db.execute(
+        "UPDATE books SET
+            title = COALESCE(?1, title),
+            author = COALESCE(?2, author),
+            reading_status = CASE WHEN ?3 IS NULL THEN reading_status WHEN ?3 = '' THEN NULL ELSE ?3 END,
+            updated_at = datetime('now')
+         WHERE id = ?4",
+        params![body.title, body.author, body.reading_status, id],
+    )
+    .map_err(|e| {
+        eprintln!("[update_book] error: {e}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    let sql = format!("SELECT {BOOK_SELECT_COLS} {BOOK_FROM} WHERE b.id = ?1 GROUP BY b.id");
+    let book = db
+        .query_row(&sql, params![id], book_from_row)
+        .map_err(|_| StatusCode::NOT_FOUND)?;
+    Ok(Json(book))
+}
+
+pub async fn touch_book(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<StatusCode, StatusCode> {
+    let db = state.db.lock().await;
+    db.execute(
+        "UPDATE books SET last_opened_at = datetime('now'), updated_at = datetime('now') WHERE id = ?1",
+        params![id],
+    )
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 pub async fn serve_book_file(
@@ -644,6 +775,7 @@ pub async fn serve_book_resource(
 #[derive(Deserialize)]
 pub struct ProgressUpdate {
     pub cfi: String,
+    pub progress: Option<f64>,
 }
 
 pub async fn save_progress(
@@ -653,8 +785,8 @@ pub async fn save_progress(
 ) -> Result<StatusCode, StatusCode> {
     let db = state.db.lock().await;
     db.execute(
-        "UPDATE books SET current_page = ?1, updated_at = datetime('now') WHERE id = ?2",
-        params![body.cfi, id],
+        "UPDATE books SET current_page = ?1, progress = COALESCE(?2, progress), updated_at = datetime('now') WHERE id = ?3",
+        params![body.cfi, body.progress, id],
     )
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(StatusCode::NO_CONTENT)
@@ -1256,4 +1388,154 @@ pub async fn delete_book(
     }
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+// ── Tags ──────────────────────────────────────────────────────────────
+
+#[derive(Serialize)]
+pub struct TagCount {
+    pub name: String,
+    pub count: i64,
+}
+
+pub async fn list_all_tags(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<Vec<TagCount>>, StatusCode> {
+    let db = state.db.lock().await;
+    let mut stmt = db
+        .prepare(
+            "SELECT t.name, COUNT(bt.book_id) as cnt \
+             FROM tags t \
+             LEFT JOIN book_tags bt ON bt.tag_id = t.id \
+             GROUP BY t.id \
+             ORDER BY t.name ASC",
+        )
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(TagCount {
+                name: row.get(0)?,
+                count: row.get(1)?,
+            })
+        })
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(rows.filter_map(|r| r.ok()).collect()))
+}
+
+pub async fn list_book_tags(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<Json<Vec<String>>, StatusCode> {
+    let db = state.db.lock().await;
+    let mut stmt = db
+        .prepare(
+            "SELECT t.name FROM tags t \
+             JOIN book_tags bt ON bt.tag_id = t.id \
+             WHERE bt.book_id = ?1 \
+             ORDER BY t.name ASC",
+        )
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let rows = stmt
+        .query_map(params![id], |row| row.get::<_, String>(0))
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(rows.filter_map(|r| r.ok()).collect()))
+}
+
+pub async fn set_book_tags(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Json(tag_names): Json<Vec<String>>,
+) -> Result<Json<Vec<String>>, StatusCode> {
+    let db = state.db.lock().await;
+
+    // Remove all existing tags for this book
+    db.execute("DELETE FROM book_tags WHERE book_id = ?1", params![id])
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    for name in &tag_names {
+        let trimmed = name.trim().to_string();
+        if trimmed.is_empty() {
+            continue;
+        }
+        // Insert tag if it doesn't exist
+        db.execute(
+            "INSERT OR IGNORE INTO tags (id, name) VALUES (?1, ?2)",
+            params![Uuid::new_v4().to_string(), trimmed],
+        )
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+        // Get tag id
+        let tag_id: String = db
+            .query_row(
+                "SELECT id FROM tags WHERE name = ?1",
+                params![trimmed],
+                |row| row.get(0),
+            )
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+        // Link book to tag
+        db.execute(
+            "INSERT OR IGNORE INTO book_tags (book_id, tag_id) VALUES (?1, ?2)",
+            params![id, tag_id],
+        )
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    }
+
+    drop(db);
+    list_book_tags(State(state), Path(id)).await
+}
+
+// ── Stats ─────────────────────────────────────────────────────────────
+
+#[derive(Serialize)]
+pub struct Stats {
+    pub total_books: i64,
+    pub finished_books: i64,
+    pub reading_books: i64,
+    pub want_to_read: i64,
+    pub total_highlights: i64,
+}
+
+pub async fn get_stats(State(state): State<Arc<AppState>>) -> Result<Json<Stats>, StatusCode> {
+    let db = state.db.lock().await;
+
+    let total_books: i64 = db
+        .query_row("SELECT COUNT(*) FROM books", [], |row| row.get(0))
+        .unwrap_or(0);
+
+    let finished_books: i64 = db
+        .query_row(
+            "SELECT COUNT(*) FROM books WHERE reading_status = 'finished'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    let reading_books: i64 = db
+        .query_row(
+            "SELECT COUNT(*) FROM books WHERE reading_status = 'reading'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    let want_to_read: i64 = db
+        .query_row(
+            "SELECT COUNT(*) FROM books WHERE reading_status = 'want_to_read'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    let total_highlights: i64 = db
+        .query_row("SELECT COUNT(*) FROM annotations", [], |row| row.get(0))
+        .unwrap_or(0);
+
+    Ok(Json(Stats {
+        total_books,
+        finished_books,
+        reading_books,
+        want_to_read,
+        total_highlights,
+    }))
 }

@@ -11,10 +11,13 @@
     onClose: () => void;
   }
 
-  let { highlights, bookId, bookTitle, onSelect, onDelete, onClose }: Props = $props();
+  let { highlights, bookId, bookTitle, onSelect, onDelete, onClose }: Props =
+    $props();
 
   function colorCss(c: string): string {
-    return highlightColors.find((x) => x.value === c)?.css ?? highlightColors[0].css;
+    return (
+      highlightColors.find((x) => x.value === c)?.css ?? highlightColors[0].css
+    );
   }
 
   function exportHighlights(format: "json" | "markdown") {
@@ -36,23 +39,47 @@
 </script>
 
 <div class="hl-overlay" onclick={onClose} role="presentation">
-  <aside class="hl-panel" onclick={(e) => e.stopPropagation()} role="presentation">
+  <aside
+    class="hl-panel"
+    onclick={(e) => e.stopPropagation()}
+    role="presentation"
+  >
     <div class="hl-header">
       <h3>Highlights</h3>
       <div class="hl-header-actions">
         {#if highlights.length > 0}
-          <button class="hl-export" onclick={() => exportHighlights("json")} title="Export as JSON" aria-label="Export JSON">JSON</button>
-          <button class="hl-export" onclick={() => exportHighlights("markdown")} title="Export as Markdown" aria-label="Export Markdown">MD</button>
+          <button
+            class="hl-export"
+            onclick={() => exportHighlights("json")}
+            title="Export as JSON"
+            aria-label="Export JSON">JSON</button
+          >
+          <button
+            class="hl-export"
+            onclick={() => exportHighlights("markdown")}
+            title="Export as Markdown"
+            aria-label="Export Markdown">MD</button
+          >
         {/if}
-        <button class="hl-close" onclick={onClose} aria-label="Close">&times;</button>
+        <button class="hl-close" onclick={onClose} aria-label="Close"
+          >&times;</button
+        >
       </div>
     </div>
     <div class="hl-body">
       {#if highlights.length === 0}
-        <p class="hl-empty">No highlights yet. Select text in the book to create one.</p>
+        <p class="hl-empty">
+          No highlights yet. Select text in the book to create one.
+        </p>
       {:else}
         {#each highlights as h (h.id)}
-          <div class="hl-item" role="button" tabindex="0" onclick={() => onSelect(h.cfiRange)} onkeydown={(e) => e.key === "Enter" && onSelect(h.cfiRange)}>
+          <div
+            class="hl-item"
+            role="button"
+            tabindex="0"
+            onclick={() => onSelect(h.cfiRange)}
+            onkeydown={(e) => e.key === "Enter" && onSelect(h.cfiRange)}
+          >
             <div class="hl-bar" style="background: {colorCss(h.color)};"></div>
             <div class="hl-content">
               {#if h.chapterLabel}
@@ -63,7 +90,14 @@
                 <p class="hl-note">{h.note}</p>
               {/if}
             </div>
-            <button class="hl-delete" onclick={(e) => { e.stopPropagation(); onDelete(h.id); }} aria-label="Delete highlight">&times;</button>
+            <button
+              class="hl-delete"
+              onclick={(e) => {
+                e.stopPropagation();
+                onDelete(h.id);
+              }}
+              aria-label="Delete highlight">&times;</button
+            >
           </div>
         {/each}
       {/if}
@@ -82,8 +116,12 @@
   }
 
   @keyframes fade-in {
-    from { opacity: 0; }
-    to   { opacity: 1; }
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
   }
 
   .hl-panel {
@@ -99,8 +137,12 @@
   }
 
   @keyframes slide-in {
-    from { transform: translateX(100%); }
-    to   { transform: translateX(0); }
+    from {
+      transform: translateX(100%);
+    }
+    to {
+      transform: translateX(0);
+    }
   }
 
   .hl-header {
@@ -233,7 +275,9 @@
     line-height: 1;
     flex-shrink: 0;
     opacity: 0;
-    transition: opacity 0.1s, color 0.1s;
+    transition:
+      opacity 0.1s,
+      color 0.1s;
   }
   .hl-item:hover .hl-delete {
     opacity: 1;

@@ -12,7 +12,8 @@
     onClose: () => void;
   }
 
-  let { highlight, x, y, onSave, onSetColor, onDelete, onClose }: Props = $props();
+  let { highlight, x, y, onSave, onSetColor, onDelete, onClose }: Props =
+    $props();
 
   let note = $state("");
 
@@ -33,39 +34,44 @@
 </script>
 
 <div class="popover-overlay" onclick={onClose} role="presentation">
-<div
-  class="note-popup"
-  style={style()}
-  onclick={(e) => e.stopPropagation()}
-  onkeydown={(e) => e.stopPropagation()}
-  role="dialog"
-  tabindex="-1"
->
-  <div class="note-header">
-    <span class="note-quote">"{highlight.text.slice(0, 80)}{highlight.text.length > 80 ? '...' : ''}"</span>
-    <button class="note-close" onclick={onClose} aria-label="Close">&times;</button>
-  </div>
-  <textarea
-    class="note-input"
-    placeholder="Add a note..."
-    bind:value={note}
-    rows="3"
-  ></textarea>
-  <div class="note-colors" role="toolbar" aria-label="Highlight colors">
-    {#each highlightColors as color}
-      <button
-        class="color-btn"
-        class:active={highlight.color === color.value}
-        style="background: {color.css};"
-        onclick={() => onSetColor(color.value)}
-        aria-label={`Set ${color.label} highlight`}
-      ></button>
-    {/each}
-  </div>
-  <div class="note-actions">
-    <button class="note-delete" onclick={onDelete}>Delete highlight</button>
-    <button class="note-save" onclick={save}>Save note</button>
-  </div>
+  <div
+    class="note-popup"
+    style={style()}
+    onclick={(e) => e.stopPropagation()}
+    onkeydown={(e) => e.stopPropagation()}
+    role="dialog"
+    tabindex="-1"
+  >
+    <div class="note-header">
+      <span class="note-quote"
+        >"{highlight.text.slice(0, 80)}{highlight.text.length > 80
+          ? "..."
+          : ""}"</span
+      >
+      <button class="note-close" onclick={onClose} aria-label="Close"
+        >&times;</button
+      >
+    </div>
+    <textarea
+      class="note-input"
+      placeholder="Add a note..."
+      bind:value={note}
+      rows="3"></textarea>
+    <div class="note-colors" role="toolbar" aria-label="Highlight colors">
+      {#each highlightColors as color}
+        <button
+          class="color-btn"
+          class:active={highlight.color === color.value}
+          style="background: {color.css};"
+          onclick={() => onSetColor(color.value)}
+          aria-label={`Set ${color.label} highlight`}
+        ></button>
+      {/each}
+    </div>
+    <div class="note-actions">
+      <button class="note-delete" onclick={onDelete}>Delete highlight</button>
+      <button class="note-save" onclick={save}>Save note</button>
+    </div>
   </div>
 </div>
 
@@ -89,8 +95,14 @@
   }
 
   @keyframes pop {
-    from { opacity: 0; transform: scale(0.95); }
-    to   { opacity: 1; transform: scale(1); }
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
   }
 
   .note-header {
