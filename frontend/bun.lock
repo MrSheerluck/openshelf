@@ -11,7 +11,6 @@
         "@fontsource/noto-sans": "^5.2.10",
         "@fontsource/shantell-sans": "^5.2.7",
         "epubjs": "^0.3.93",
-        "pdfjs-dist": "^6.0.227",
       },
       "devDependencies": {
         "@sveltejs/adapter-static": "^3.0.0",
@@ -285,8 +284,6 @@
     "pako": ["pako@1.0.11", "", {}, "sha512-4hLB8Py4zZce5s4yd9XzopqwVv/yGNhV1Bl8NTmCq1763HeK2+EwVTv+leGeL13Dnh2wfbqowVPXCIO0z4taYw=="],
 
     "path-webpack": ["path-webpack@0.0.3", "", {}, "sha512-AmeDxedoo5svf7aB3FYqSAKqMxys014lVKBzy1o/5vv9CtU7U4wgGWL1dA2o6MOzcD53ScN4Jmiq6VbtLz1vIQ=="],
-
-    "pdfjs-dist": ["pdfjs-dist@6.0.227", "", { "optionalDependencies": { "@napi-rs/canvas": "^1.0.0" } }, "sha512-/P6M4SXw+70waMVLUM7rdRtvo+dEzqE1t6W/zQNvBETo2MaRa5rrvCcAYdfWGiUzadTgM0lJmRApUrW0d9zgKg=="],
 
     "picocolors": ["picocolors@1.1.1", "", {}, "sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA=="],
 

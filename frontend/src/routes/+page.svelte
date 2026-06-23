@@ -2,7 +2,7 @@
   import * as auth from "$lib/auth.svelte.ts";
   import { api, uploadFile as apiUpload, extractErrorMessage } from "$lib/api";
   import { goto } from "$app/navigation";
-  import { extractPdfCover } from "$lib/pdf";
+
 
   interface Book {
     id: string;
@@ -14,7 +14,7 @@
     created_at: string;
   }
 
-  const ALLOWED_EXTENSIONS = [".epub", ".pdf", ".mobi"];
+  const ALLOWED_EXTENSIONS = [".epub", ".mobi"];
 
   let books = $state<Book[]>([]);
   let uploading = $state(false);
@@ -43,7 +43,6 @@
   function detectFormat(file: File): string {
     const lower = file.name.toLowerCase();
     if (lower.endsWith(".epub")) return "epub";
-    if (lower.endsWith(".pdf")) return "pdf";
     if (lower.endsWith(".mobi")) return "mobi";
     return "epub";
   }
@@ -81,15 +80,6 @@
     try {
       const form = new FormData();
       form.append("file", file);
-
-      const format = detectFormat(file);
-      if (format === "pdf") {
-        uploadStatus = "Rendering cover...";
-        const coverBlob = await extractPdfCover(file);
-        if (coverBlob) {
-          form.append("cover", coverBlob, "cover.jpg");
-        }
-      }
 
       uploadStatus = "Uploading...";
       const res = await apiUpload("/api/books", form, (loaded, total) => {
@@ -173,11 +163,11 @@
     {:else if books.length === 0}
       <div class="empty-state">
         <h2>Upload your first book</h2>
-        <p>Drag and drop an EPUB, PDF, or MOBI file or click to browse.</p>
+        <p>Drag and drop an EPUB or MOBI file or click to browse.</p>
         <label class="upload-area" class:dragover={dragOver}>
           <input
             type="file"
-            accept=".epub,.pdf,.mobi"
+            accept=".epub,.mobi"
             onchange={handleFileInput}
             disabled={uploading}
           />
@@ -202,7 +192,7 @@
           <label class="upload-btn">
             <input
               type="file"
-              accept=".epub,.pdf,.mobi"
+              accept=".epub,.mobi"
               onchange={handleFileInput}
               disabled={uploading}
             />
@@ -223,7 +213,7 @@
           {#each books as book (book.id)}
             <div class="book-card" role="link" tabindex="0">
               <button class="book-card-link" onclick={() => goto(`/read/${book.id}`)}>
-                <div class="book-cover" class:epub={book.format === "epub"} class:pdf={book.format === "pdf"} class:mobi={book.format === "mobi"}>
+                <div class="book-cover" class:epub={book.format === "epub"} class:mobi={book.format === "mobi"}>
                   {#if coverUrl(book)}
                     <img src={coverUrl(book)!} alt={book.title} class="cover-img" />
                   {:else}
@@ -448,9 +438,6 @@
   }
   .book-cover.epub {
     background: linear-gradient(135deg, #e0c3fc, #8ec5fc);
-  }
-  .book-cover.pdf {
-    background: linear-gradient(135deg, #fcc3c3, #fc8e8e);
   }
   .book-cover.mobi {
     background: linear-gradient(135deg, #c3fce0, #8efcb0);

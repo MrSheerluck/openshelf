@@ -299,8 +299,6 @@ pub async fn upload_book(
     let id = Uuid::new_v4().to_string();
     let format = if filename.ends_with(".epub") {
         "epub"
-    } else if filename.ends_with(".pdf") {
-        "pdf"
     } else if filename.ends_with(".mobi") {
         "mobi"
     } else {
@@ -310,7 +308,6 @@ pub async fn upload_book(
     if title.is_empty() {
         title = filename
             .strip_suffix(".epub")
-            .or_else(|| filename.strip_suffix(".pdf"))
             .or_else(|| filename.strip_suffix(".mobi"))
             .unwrap_or(&filename)
             .to_string();
@@ -488,11 +485,11 @@ pub async fn serve_book_file(
     let storage = storage(&state).map_err(|e| e.0)?;
 
     let db = state.db.lock().await;
-    let (file_path, format): (String, String) = db
+    let file_path: String = db
         .query_row(
-            "SELECT file_path, format FROM books WHERE id = ?1",
+            "SELECT file_path FROM books WHERE id = ?1",
             params![id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
+            |row| row.get(0),
         )
         .map_err(|_| StatusCode::NOT_FOUND)?;
     drop(db);
@@ -502,10 +499,7 @@ pub async fn serve_book_file(
         .await
         .map_err(|_| StatusCode::NOT_FOUND)?;
 
-    let mime = match format.as_str() {
-        "pdf" => "application/pdf",
-        _ => "application/epub+zip",
-    };
+    let mime = "application/epub+zip";
 
     Ok(Response::builder()
         .header(header::CONTENT_TYPE, mime)
@@ -1098,11 +1092,14 @@ pub async fn spine_info(
     };
 
     let cursor = Cursor::new(zip_bytes.as_ref());
-    let mut archive = zip::ZipArchive::new(cursor).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let mut archive =
+        zip::ZipArchive::new(cursor).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Read container.xml → locate OPF
     let container_bytes = {
-        let mut f = archive.by_name("META-INF/container.xml").map_err(|_| StatusCode::NOT_FOUND)?;
+        let mut f = archive
+            .by_name("META-INF/container.xml")
+            .map_err(|_| StatusCode::NOT_FOUND)?;
         let mut buf = Vec::new();
         f.read_to_end(&mut buf).ok();
         buf
@@ -1135,7 +1132,9 @@ pub async fn spine_info(
     }
 
     let opf_bytes = {
-        let mut f = archive.by_name(&opf_path).map_err(|_| StatusCode::NOT_FOUND)?;
+        let mut f = archive
+            .by_name(&opf_path)
+            .map_err(|_| StatusCode::NOT_FOUND)?;
         let mut buf = Vec::new();
         f.read_to_end(&mut buf).ok();
         buf

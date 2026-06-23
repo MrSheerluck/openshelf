@@ -526,7 +526,6 @@
   class:cream={book?.format === "epub" && settings?.theme === "cream"}
   class:green={book?.format === "epub" && settings?.theme === "green"}
   class:night={book?.format === "epub" && settings?.theme === "night"}
-  class:pdf={book?.format === "pdf"}
 >
   <div class="reader-header-wrap" class:hidden={book?.format === "epub" && !showControls}>
     <ReaderHeader
@@ -724,11 +723,6 @@
     --reader-hover: rgba(45, 58, 45, 0.05);
     --reader-progress-track: rgba(45, 58, 45, 0.1);
   }
-  .reader-app.pdf {
-    --reader-bg: #525659;
-    --reader-fg: #d4d4d4;
-  }
-
   .reader-header-wrap {
     position: relative;
     z-index: 10;

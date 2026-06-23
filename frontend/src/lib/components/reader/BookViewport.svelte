@@ -78,12 +78,6 @@
     <p class="reader-status error">{error}</p>
   {:else if !book}
     <p class="reader-status">Loading...</p>
-  {:else if book.format === "pdf"}
-    {#if fileBlobUrl}
-      <iframe src={fileBlobUrl} title="PDF viewer" class="pdf-viewer"></iframe>
-    {:else}
-      <p class="reader-status">Loading PDF...</p>
-    {/if}
   {:else if book.format === "mobi"}
     <div class="unsupported-format">
       <p>MOBI files cannot be displayed in the browser.</p>
@@ -187,15 +181,6 @@
     width: 100%;
     height: 100%;
     background: transparent;
-  }
-
-  .pdf-viewer {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    border: none;
-    display: block;
   }
 
   .unsupported-format {

@@ -25,7 +25,6 @@
     "@fontsource/literata": "^5.2.8",
     "@fontsource/noto-sans": "^5.2.10",
     "@fontsource/shantell-sans": "^5.2.7",
-    "epubjs": "^0.3.93",
-    "pdfjs-dist": "^6.0.227"
+    "epubjs": "^0.3.93"
   }
 }
