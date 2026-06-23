@@ -423,6 +423,8 @@ export class EpubController {
   private onCfiChange: ((cfi: string) => void) | null = null;
   private onSelectCb: ((cfiRange: string, text: string, rect: DOMRect) => void) | null = null;
   private onHighlightClickCb: ((cfiRange: string) => void) | null = null;
+  private onContentClickCb: (() => void) | null = null;
+  private onKeydownCb: ((e: KeyboardEvent) => void) | null = null;
   private navigationPromise: Promise<boolean> = Promise.resolve(true);
 
   constructor(options: EpubControllerOptions) {
@@ -439,6 +441,14 @@ export class EpubController {
 
   onHighlightClick(cb: (cfiRange: string) => void): void {
     this.onHighlightClickCb = cb;
+  }
+
+  onContentClick(cb: () => void): void {
+    this.onContentClickCb = cb;
+  }
+
+  onKeydown(cb: (e: KeyboardEvent) => void): void {
+    this.onKeydownCb = cb;
   }
 
   async mount(el: HTMLElement): Promise<void> {
@@ -547,22 +557,28 @@ export class EpubController {
 
       const SWIPE_THRESHOLD = 50;
       let downX = 0, downY = 0, isDown = false;
-      let pointerSelecting = false;
 
       this.rendition.on("mousedown", (e: any) => {
         downX = e.clientX ?? 0;
         downY = e.clientY ?? 0;
         isDown = true;
-        pointerSelecting = false;
+
+        try {
+          const contentsList = this.rendition?.getContents();
+          if (contentsList) {
+            for (const content of contentsList) {
+              const sel = content.window?.getSelection();
+              if (sel) sel.removeAllRanges();
+            }
+          }
+        } catch {}
+        if (this.onContentClickCb) this.onContentClickCb();
       });
 
       this.rendition.on("mouseup", (e: any) => {
         if (!isDown) return;
         isDown = false;
-        if (pointerSelecting || this.hasActiveSelection()) {
-          pointerSelecting = false;
-          return;
-        }
+        if (this.hasActiveSelection()) return;
         const dx = (e.clientX ?? 0) - downX;
         const dy = (e.clientY ?? 0) - downY;
         if (Math.abs(dx) > SWIPE_THRESHOLD && Math.abs(dx) > Math.abs(dy) * 2) {
@@ -571,30 +587,28 @@ export class EpubController {
         }
       });
 
-      this.rendition.on("mousemove", (e: any) => {
-        if (!isDown) return;
-        const dx = Math.abs((e.clientX ?? 0) - downX);
-        const dy = Math.abs((e.clientY ?? 0) - downY);
-        if (dx > 4 || dy > 4) {
-          pointerSelecting = this.hasActiveSelection();
-        }
-      });
-
       this.rendition.on("touchstart", (e: any) => {
         const t = e.touches?.[0];
         downX = t?.clientX ?? 0;
         downY = t?.clientY ?? 0;
         isDown = true;
-        pointerSelecting = false;
+
+        try {
+          const contentsList = this.rendition?.getContents();
+          if (contentsList) {
+            for (const content of contentsList) {
+              const sel = content.window?.getSelection();
+              if (sel) sel.removeAllRanges();
+            }
+          }
+        } catch {}
+        if (this.onContentClickCb) this.onContentClickCb();
       }, { passive: true });
 
       this.rendition.on("touchend", (e: any) => {
         if (!isDown) return;
         isDown = false;
-        if (pointerSelecting || this.hasActiveSelection()) {
-          pointerSelecting = false;
-          return;
-        }
+        if (this.hasActiveSelection()) return;
         const t = e.changedTouches?.[0];
         if (!t) return;
         const dx = t.clientX - downX;
@@ -605,10 +619,10 @@ export class EpubController {
         }
       }, { passive: true });
 
-      this.rendition.on("touchmove", () => {
-        if (!isDown) return;
-        pointerSelecting = this.hasActiveSelection();
-      }, { passive: true });
+      this.rendition.on("keydown", (e: any) => {
+        if (this.onKeydownCb) this.onKeydownCb(e as KeyboardEvent);
+      });
+
     } catch (e) {
       console.error("EPUB render error:", e);
       this.error = `Failed to render book: ${e instanceof Error ? e.message : String(e)}`;

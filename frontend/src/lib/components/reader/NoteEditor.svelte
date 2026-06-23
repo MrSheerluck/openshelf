@@ -32,6 +32,7 @@
   }
 </script>
 
+<div class="popover-overlay" onclick={onClose} role="presentation">
 <div
   class="note-popup"
   style={style()}
@@ -65,9 +66,16 @@
     <button class="note-delete" onclick={onDelete}>Delete highlight</button>
     <button class="note-save" onclick={save}>Save note</button>
   </div>
+  </div>
 </div>
 
 <style>
+  .popover-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+  }
+
   .note-popup {
     position: fixed;
     z-index: 71;

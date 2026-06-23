@@ -171,6 +171,19 @@
         noteEditor = { highlight: h, x, y };
       }
     });
+    c.onContentClick(() => {
+      handleActivity();
+      if (selection) {
+        selection = null;
+        c.clearSelection();
+      }
+      if (dictWord) dictWord = null;
+      if (noteEditor) noteEditor = null;
+    });
+    c.onKeydown((e) => {
+      if (e.key === "ArrowLeft" || e.key === "ArrowRight") e.preventDefault();
+      handleKeydown(e);
+    });
     controller = c;
     await c.mount(el);
     if (c.error) {
@@ -328,43 +341,51 @@
   }
 
   function handleKeydown(e: KeyboardEvent) {
-    if (showTypography && e.key === "Escape") {
-      showTypography = false;
-      return;
-    }
     if (book?.format !== "epub") return;
+
     if (showToc) {
       if (e.key === "Escape") showToc = false;
-      return;
-    }
-    if (showHighlights) {
-      if (e.key === "Escape") showHighlights = false;
-      return;
-    }
-    if (showBookmarks) {
-      if (e.key === "Escape") showBookmarks = false;
       return;
     }
     if (showSearch) {
       if (e.key === "Escape") showSearch = false;
       return;
     }
-    if (selection || dictWord || noteEditor) {
-      if (e.key === "Escape") {
-        selection = null;
-        dictWord = null;
-        noteEditor = null;
-      }
+    if (showBookmarks) {
+      if (e.key === "Escape") showBookmarks = false;
       return;
     }
-    if (e.key === "ArrowLeft") prevPage();
-    if (e.key === "ArrowRight") nextPage();
+    if (showHighlights) {
+      if (e.key === "Escape") showHighlights = false;
+      return;
+    }
+    if (showTypography) {
+      if (e.key === "Escape") showTypography = false;
+      return;
+    }
+
+    if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+      if (selection) { selection = null; controller?.clearSelection(); }
+      if (dictWord) dictWord = null;
+      if (noteEditor) noteEditor = null;
+      if (e.key === "ArrowLeft") prevPage();
+      else nextPage();
+      return;
+    }
+
+    if (e.key === "Escape") {
+      if (noteEditor) { noteEditor = null; return; }
+      if (dictWord) { dictWord = null; return; }
+      if (selection) { selection = null; controller?.clearSelection(); return; }
+      goto("/");
+      return;
+    }
+
     if (e.key.toLowerCase() === "b") toggleBookmark();
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") {
       e.preventDefault();
       showSearch = true;
     }
-    if (e.key === "Escape") goto("/");
   }
 
   function goBack() {

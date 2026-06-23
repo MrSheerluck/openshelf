@@ -63,6 +63,7 @@
   });
 </script>
 
+<div class="popover-overlay" onclick={onClose} role="presentation">
 <div
   class="dict-popup"
   style={style()}
@@ -103,9 +104,16 @@
       {/each}
     {/if}
   </div>
+  </div>
 </div>
 
 <style>
+  .popover-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+  }
+
   .dict-popup {
     position: fixed;
     z-index: 71;
