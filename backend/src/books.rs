@@ -1052,6 +1052,185 @@ pub async fn save_settings(
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[derive(Serialize)]
+pub struct SpineItem {
+    pub href: String,
+    pub id: String,
+    pub media_type: String,
+}
+
+/// Lightweight endpoint that returns the EPUB spine (ordered table of contents
+/// manifest entries) by parsing only the OPF — no full-file download needed.
+pub async fn spine_info(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<Json<Vec<SpineItem>>, StatusCode> {
+    let storage = storage(&state).map_err(|e| e.0)?;
+
+    let db = state.db.lock().await;
+    let file_path: String = db
+        .query_row(
+            "SELECT file_path FROM books WHERE id = ?1",
+            params![id],
+            |row| row.get(0),
+        )
+        .map_err(|_| StatusCode::NOT_FOUND)?;
+    drop(db);
+
+    let zip_bytes = {
+        let cache = state.epub_cache.lock().await;
+        if let Some(hit) = cache.get(&id) {
+            hit.clone()
+        } else {
+            drop(cache);
+            let fetched = storage
+                .get(&file_path)
+                .await
+                .map_err(|_| StatusCode::NOT_FOUND)?;
+            let arc = Arc::new(fetched);
+            state
+                .epub_cache
+                .lock()
+                .await
+                .insert(id.clone(), arc.clone());
+            arc
+        }
+    };
+
+    let cursor = Cursor::new(zip_bytes.as_ref());
+    let mut archive = zip::ZipArchive::new(cursor).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Read container.xml → locate OPF
+    let container_bytes = {
+        let mut f = archive.by_name("META-INF/container.xml").map_err(|_| StatusCode::NOT_FOUND)?;
+        let mut buf = Vec::new();
+        f.read_to_end(&mut buf).ok();
+        buf
+    };
+
+    let mut reader = Reader::from_reader(Cursor::new(&container_bytes));
+    reader.config_mut().trim_text(true);
+    let mut opf_path = String::new();
+    let mut buf = Vec::new();
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
+                let ename = e.name();
+                if ename.as_ref() == b"rootfile" {
+                    for attr in e.attributes().flatten() {
+                        if attr.key.as_ref() == b"full-path" {
+                            opf_path = String::from_utf8_lossy(&attr.value).to_string();
+                        }
+                    }
+                }
+            }
+            Ok(Event::Eof) => break,
+            Err(_) => break,
+            _ => {}
+        }
+        buf.clear();
+    }
+    if opf_path.is_empty() {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    let opf_bytes = {
+        let mut f = archive.by_name(&opf_path).map_err(|_| StatusCode::NOT_FOUND)?;
+        let mut buf = Vec::new();
+        f.read_to_end(&mut buf).ok();
+        buf
+    };
+
+    // Parse manifest items
+    let mut manifest: Vec<(String, String, String)> = Vec::new(); // (id, href, media_type)
+    let mut spine_refs: Vec<String> = Vec::new(); // ordered idrefs
+
+    let mut reader = Reader::from_reader(Cursor::new(&opf_bytes));
+    reader.config_mut().trim_text(true);
+    let mut buf = Vec::new();
+    let mut in_manifest = false;
+    let mut in_spine = false;
+
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
+                let tag_name = e.name();
+                let tag = tag_name.as_ref();
+                if tag == b"manifest" {
+                    in_manifest = true;
+                }
+                if tag == b"spine" {
+                    in_spine = true;
+                }
+                if in_manifest && tag == b"item" {
+                    let mut id = String::new();
+                    let mut href = String::new();
+                    let mut media_type = String::new();
+                    for attr in e.attributes().flatten() {
+                        let key = std::str::from_utf8(attr.key.as_ref()).unwrap_or("");
+                        let val = std::str::from_utf8(&attr.value).unwrap_or("");
+                        match key {
+                            "id" => id = val.to_string(),
+                            "href" => href = val.to_string(),
+                            "media-type" => media_type = val.to_string(),
+                            _ => {}
+                        }
+                    }
+                    if !id.is_empty() && !href.is_empty() {
+                        manifest.push((id, href, media_type));
+                    }
+                }
+                if in_spine && tag == b"itemref" {
+                    for attr in e.attributes().flatten() {
+                        let key = std::str::from_utf8(attr.key.as_ref()).unwrap_or("");
+                        let val = std::str::from_utf8(&attr.value).unwrap_or("");
+                        if key == "idref" {
+                            spine_refs.push(val.to_string());
+                        }
+                    }
+                }
+            }
+            Ok(Event::End(ref e)) => {
+                let tag_name = e.name();
+                let tag = tag_name.as_ref();
+                if tag == b"manifest" {
+                    in_manifest = false;
+                }
+                if tag == b"spine" {
+                    in_spine = false;
+                }
+            }
+            Ok(Event::Eof) => break,
+            Err(_) => break,
+            _ => {}
+        }
+        buf.clear();
+    }
+
+    // Join spine idrefs with manifest entries in spine order
+    let lookup: std::collections::HashMap<&str, (&str, &str)> = manifest
+        .iter()
+        .map(|(id, href, mt)| (id.as_str(), (href.as_str(), mt.as_str())))
+        .collect();
+
+    let result: Vec<SpineItem> = spine_refs
+        .iter()
+        .filter_map(|idref| {
+            lookup.get(idref.as_str()).map(|(href, mt)| SpineItem {
+                id: idref.clone(),
+                href: (*href).to_string(),
+                media_type: (*mt).to_string(),
+            })
+        })
+        .collect();
+
+    if result.is_empty() {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    Ok(Json(result))
+}
+
 pub async fn delete_book(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,

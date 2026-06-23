@@ -1,3 +1,9 @@
+<script context="module" lang="ts">
+  // Blob cache survives SPA navigation (library ↔ reader).
+  // Re-opening the same book during a session is instant — no re-download.
+  const __blobCache = new Map<string, string>();
+</script>
+
 <script lang="ts">
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
@@ -9,11 +15,12 @@
     HighlightColor,
     Highlight,
     SearchResult,
+    SpineItem,
   } from "$lib/reader/types";
   import { ReaderSettingsStore } from "$lib/reader/settings.svelte";
   import { HighlightsStore } from "$lib/reader/highlights.svelte";
   import { BookmarksStore } from "$lib/reader/bookmarks.svelte";
-  import { EpubController } from "$lib/reader/epub.svelte";
+  import { EpubController, buildReaderCss } from "$lib/reader/epub.svelte";
   import ReaderHeader from "$lib/components/reader/ReaderHeader.svelte";
   import ReaderFooter from "$lib/components/reader/ReaderFooter.svelte";
   import TocPanel from "$lib/components/reader/TocPanel.svelte";
@@ -45,7 +52,9 @@
   let highlightsStore = $state<HighlightsStore | null>(null);
   let bookmarksStore = $state<BookmarksStore | null>(null);
   let controller = $state<EpubController | null>(null);
-  let viewerMountStarted = false;
+  let firstChapterHtml = $state<string | null>(null);
+  let firstChapterHref = $state<string | null>(null);
+  let viewerEl = $state<HTMLDivElement | null>(null);
 
   type Selection = { cfiRange: string; text: string; x: number; y: number } | null;
   let selection = $state<Selection>(null);
@@ -60,19 +69,6 @@
     return `${API_URL}/api/books/${id}/file`;
   }
 
-  async function prefetchFileBlob(): Promise<string | null> {
-    try {
-      const res = await fetch(fileUrl(), { credentials: "include" });
-      if (!res.ok) return null;
-      const blob = await res.blob();
-      if (fileBlobUrl) URL.revokeObjectURL(fileBlobUrl);
-      fileBlobUrl = URL.createObjectURL(blob);
-      return fileBlobUrl;
-    } catch {
-      return null;
-    }
-  }
-
   async function saveProgress(cfi: string) {
     if (!cfi) return;
     try {
@@ -83,120 +79,172 @@
     } catch {}
   }
 
-  async function loadBook() {
-    loading = true;
-    error = "";
-    try {
-      const res = await api(`/api/books/${id}`);
-      if (res.ok) {
-        book = await res.json();
-      } else {
-        error = "Book not found";
-        loading = false;
+  // ── Parallel initialisation ──────────────────────────────────────────
+  $effect(() => {
+    const bookId = String(page.params.id);
+
+    // 1. Fire everything in parallel
+    const bookPromise = api(`/api/books/${bookId}`)
+      .then(async (res) => {
+        if (!res.ok) { error = "Book not found"; return null; }
+        const data: Book = await res.json();
+        book = data;
+        return data;
+      })
+      .catch(() => { error = "Failed to load book"; return null; });
+
+    const blobPromise = (async () => {
+      const cached = __blobCache.get(bookId);
+      if (cached) {
+        fileBlobUrl = cached;
+        return cached;
       }
-    } catch {
-      error = "Failed to load book";
-      loading = false;
-    }
-  }
+      try {
+        const res = await fetch(fileUrl(), { credentials: "include" });
+        if (!res.ok) return null;
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        __blobCache.set(bookId, url);
+        fileBlobUrl = url;
+        return url;
+      } catch { return null; }
+    })();
 
-  $effect(() => {
-    loadBook();
-  });
+    const spinePromise = api(`/api/books/${bookId}/spine`)
+      .then(async (res) => {
+        if (!res.ok) return null;
+        return (await res.json()) as SpineItem[];
+      })
+      .catch(() => null);
 
-  $effect(() => {
-    if (!book) return;
-    if (book.format === "pdf" || book.format === "epub") {
-      prefetchFileBlob().then((url) => {
-        if (url) {
-          loading = false;
-        } else {
-          error = `Failed to load ${book?.format === "pdf" ? "PDF" : "EPUB"}`;
+    // Start epubjs import early (it's large)
+    import("epubjs").catch(() => {});
+
+    // 2. Create stores with local settings (synchronous, no await)
+    const localSettings = new ReaderSettingsStore(bookId);
+    const localHighlights = new HighlightsStore(bookId);
+    const localBookmarks = new BookmarksStore(bookId);
+    settings = localSettings;
+    highlightsStore = localHighlights;
+    bookmarksStore = localBookmarks;
+
+    // 3. When book metadata arrives → show preview or cover
+    // New readers (no saved position) → show first chapter preview immediately.
+    // Returning readers (has saved CFI) → show book cover while epubjs loads
+    // at the exact saved position — no visual jump.
+    const initialCfiPromise = bookPromise.then(async (bookData) => {
+      if (bookData) localBookmarks.load();
+      if (!bookData || bookData.format !== "epub") { loading = false; return null; }
+
+      const savedCfi = (bookData as any).current_page ?? null;
+      if (savedCfi) {
+        // Returning reader: don't show a chapter preview (it would never match
+        // the exact saved CFI position, causing a jarring jump when epubjs
+        // restores). The book cover shows instead of a generic spinner.
+        return savedCfi;
+      }
+
+      // New reader: show first chapter preview while blob loads
+      const spineData = await spinePromise;
+      const first = spineData?.[0];
+      if (!first) { loading = false; return null; }
+      try {
+        const res = await api(`/api/books/${bookId}/resource/${first.href}`);
+        if (res.ok) {
+          firstChapterHtml = await res.text();
+          firstChapterHref = first.href;
           loading = false;
         }
-      });
-    } else {
-      loading = false;
-    }
-    return () => {
-      if (fileBlobUrl) {
-        URL.revokeObjectURL(fileBlobUrl);
-        fileBlobUrl = null;
+      } catch { loading = false; }
+      return null;
+    });
+
+    // 5. When blob is ready → mount the real viewer
+    blobPromise.then(async (url) => {
+      if (!url) {
+        error = "Failed to load book file";
+        loading = false;
+        return;
       }
+      // Only EPUB uses the epubjs controller
+      const format = (await bookPromise as any)?.format;
+      if (format !== "epub") return;
+      loading = false;
+
+      // Wait for viewer DOM element to be in the tree
+      const el = await waitForViewerEl();
+
+      // Wait for book metadata (to get initialCfi), then load settings
+      const initialCfi = await initialCfiPromise;
+      await localSettings.load(initialCfi);
+
+      const c = new EpubController({
+        fileUrl: url,
+        bookId,
+        typography: localSettings.typography,
+        themeName: localSettings.theme,
+        initialCfi: initialCfi ?? undefined,
+      });
+      c.onProgress((cfi) => {
+        localSettings.save({ cfi });
+        saveProgress(cfi);
+      });
+      c.onSelect((cfiRange, text, rect) => {
+        selection = { cfiRange, text, x: rect.left + rect.width / 2, y: rect.top };
+      });
+      c.onHighlightClick((cfiRange) => {
+        if (!localHighlights) return;
+        const h = localHighlights.findByCfi(cfiRange);
+        if (h) {
+          let x = window.innerWidth / 2, y = window.innerHeight / 2;
+          try {
+            const ann = c.rendition?.annotations?._annotations?.[encodeURI(cfiRange + "highlight")];
+            if (ann?.mark?.element) {
+              const r = ann.mark.element.getBoundingClientRect();
+              x = r.left + r.width / 2; y = r.top;
+            }
+          } catch {}
+          noteEditor = { highlight: h, x, y };
+        }
+      });
+      c.onContentClick(() => {
+        handleActivity();
+        if (selection) { selection = null; c.clearSelection(); }
+        if (dictWord) dictWord = null;
+        if (noteEditor) noteEditor = null;
+      });
+      c.onKeydown((e) => {
+        if (e.key === "ArrowLeft" || e.key === "ArrowRight") e.preventDefault();
+        handleKeydown(e);
+      });
+      controller = c;
+      await c.mount(el);
+      if (c.error) { error = c.error; return; }
+      if (c.restoreFailed) localSettings.clearCfi();
+
+      // Fetch highlights (from backend, or localStorage) then render them
+      await localHighlights.load();
+      c.renderHighlights(localHighlights.highlights);
+      syncHighlightChapterLabels();
+
+      // Epubjs is live → hide the provisional preview
+      firstChapterHtml = null;
+    });
+
+    // Cleanup on unmount — keep the blob URL in cache for instant re-open
+    return () => {
+      if (controller) { controller.destroy(); controller = null; }
     };
   });
 
-  async function handleViewerMount(el: HTMLDivElement) {
-    if (!book || book.format !== "epub" || !fileBlobUrl || controller || viewerMountStarted) return;
-    viewerMountStarted = true;
-    if (!settings) {
-      settings = new ReaderSettingsStore(id);
-    }
-    if (!highlightsStore) {
-      highlightsStore = new HighlightsStore(id);
-    }
-    if (!bookmarksStore) {
-      bookmarksStore = new BookmarksStore(id);
-    }
-    const stored = await settings.load();
-    await highlightsStore.load();
-    await bookmarksStore.load();
-    const c = new EpubController({
-      fileUrl: fileBlobUrl,
-      bookId: id,
-      typography: settings.typography,
-      themeName: settings.theme,
-      initialCfi: stored.cfi,
+  // Helper: wait until the epub-viewer DOM element appears
+  function waitForViewerEl(): Promise<HTMLDivElement> {
+    return new Promise((resolve) => {
+      if (viewerEl) { resolve(viewerEl); return; }
+      const check = setInterval(() => {
+        if (viewerEl) { clearInterval(check); resolve(viewerEl); }
+      }, 30);
     });
-    c.onProgress((cfi) => {
-      if (settings) settings.save({ cfi });
-      saveProgress(cfi);
-    });
-    c.onSelect((cfiRange, text, rect) => {
-      selection = { cfiRange, text, x: rect.left + rect.width / 2, y: rect.top };
-    });
-    c.onHighlightClick((cfiRange) => {
-      if (!highlightsStore) return;
-      const h = highlightsStore.findByCfi(cfiRange);
-      if (h) {
-        let x = window.innerWidth / 2, y = window.innerHeight / 2;
-        try {
-          const ann = c.rendition?.annotations?._annotations?.[encodeURI(cfiRange + "highlight")];
-          if (ann?.mark?.element) {
-            const r = ann.mark.element.getBoundingClientRect();
-            x = r.left + r.width / 2;
-            y = r.top;
-          }
-        } catch {}
-        noteEditor = { highlight: h, x, y };
-      }
-    });
-    c.onContentClick(() => {
-      handleActivity();
-      if (selection) {
-        selection = null;
-        c.clearSelection();
-      }
-      if (dictWord) dictWord = null;
-      if (noteEditor) noteEditor = null;
-    });
-    c.onKeydown((e) => {
-      if (e.key === "ArrowLeft" || e.key === "ArrowRight") e.preventDefault();
-      handleKeydown(e);
-    });
-    controller = c;
-    await c.mount(el);
-    if (c.error) {
-      error = c.error;
-      return;
-    }
-    if (c.restoreFailed) {
-      settings?.clearCfi();
-    }
-    if (highlightsStore) {
-      c.renderHighlights(highlightsStore.highlights);
-      syncHighlightChapterLabels();
-    }
   }
 
   function setTheme(t: ThemeName) {
@@ -393,13 +441,11 @@
   }
 
   function downloadFile() {
-    prefetchFileBlob().then((url) => {
-      if (!url) return;
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = book?.title ?? "book";
-      a.click();
-    });
+    const url = fileBlobUrl || fileUrl();
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = book?.title ?? "book";
+    a.click();
   }
 
   let idleTimer: ReturnType<typeof setTimeout> | null = null;
@@ -460,15 +506,6 @@
     highlightsStore.highlights.length;
     syncHighlightChapterLabels();
   });
-
-  $effect(() => {
-    return () => {
-      if (controller) {
-        controller.destroy();
-        controller = null;
-      }
-    };
-  });
 </script>
 
 <svelte:head>
@@ -511,8 +548,10 @@
     {fileBlobUrl}
     {loading}
     {error}
+    {firstChapterHtml}
+    {firstChapterHref}
     pageTurning={controller?.pageTurning ?? null}
-    onViewerMount={handleViewerMount}
+    onViewportEl={(el) => (viewerEl = el)}
     onDownload={downloadFile}
   />
 

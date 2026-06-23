@@ -101,6 +101,7 @@ async fn main() {
             "/books/{id}/annotations/export",
             get(books::export_annotations),
         )
+        .route("/books/{id}/spine", get(books::spine_info))
         .route(
             "/books/{id}/settings",
             get(books::get_settings).put(books::save_settings),

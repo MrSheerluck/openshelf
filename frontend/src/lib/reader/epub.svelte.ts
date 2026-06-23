@@ -66,7 +66,7 @@ export interface EpubControllerOptions {
   initialCfi?: string;
 }
 
-function buildReaderCss(
+export function buildReaderCss(
   themeName: ThemeName,
   typography: Typography,
   isFixedLayout = false,
@@ -499,16 +499,15 @@ export class EpubController {
         this.injectBaseTag(doc, section);
       });
 
-      await this.displayTarget(undefined);
-
       if (this.options.initialCfi) {
         this.restoreFailed = false;
         const restored = await this.displayTarget(this.options.initialCfi);
         if (!restored) {
           this.restoreFailed = true;
-          console.warn("Failed to restore saved reading position", this.options.initialCfi);
           await this.displayTarget(undefined);
         }
+      } else {
+        await this.displayTarget(undefined);
       }
 
       this.bookObj.ready.then(async () => {

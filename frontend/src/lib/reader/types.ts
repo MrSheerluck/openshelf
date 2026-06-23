@@ -65,6 +65,12 @@ export interface Bookmark {
   createdAt: number;
 }
 
+export interface SpineItem {
+  href: string;
+  id: string;
+  media_type: string;
+}
+
 export interface SearchResult {
   id: string;
   chapterIndex: number;
